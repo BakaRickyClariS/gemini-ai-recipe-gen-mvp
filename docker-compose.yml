@@ -1,0 +1,26 @@
+services:
+  api1:
+    build: .
+    container_name: recipe-api-api1
+    env_file: .env
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+
+  api2:
+    build: .
+    container_name: recipe-api-api2
+    env_file: .env
+    ports:
+      - "3002:3000"
+    restart: unless-stopped
+
+  nginx:
+    build: ./nginx
+    container_name: recipe-api-nginx
+    depends_on:
+      - api1
+      - api2
+    ports:
+      - "8080:80"
+    restart: unless-stopped
