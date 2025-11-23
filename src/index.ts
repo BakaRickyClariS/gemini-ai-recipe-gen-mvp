@@ -15,7 +15,17 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const upload = multer({ dest: "uploads/" });
 
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "https://fufood.vercel.app",
+      "https://gemini-ai-recipe-gen-mvp.vercel.app",
+      "http://localhost:5173",
+      "http://localhost:3000",
+    ],
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
