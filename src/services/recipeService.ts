@@ -53,22 +53,23 @@ type Recipe = {
 }
 
 type AnalyzeImageResult = {
-  imageDescription: string;
-  detectedIngredients: Array<{
-    name: string;
-    confidence?: number;
-    quantity?: string;
-    freshness?: string;
-    notes?: string;
-  }>;
-  suggestedCuisines?: string[];
-  suggestedDishes?: Array<{
-    dishName: string;
-    requiredAdditionalIngredients?: string[];
-  }>;
-  healthScore?: number;
-  preparationDifficulty?: "easy" | "medium" | "hard";
-  estimatedCookTime?: number;
+  // 產品資訊
+  productName: string; // 產品名
+  category: string; // 分類
+  attributes: string; // 屬性
+  purchaseQuantity: number; // 購物數量
+  unit: string; // 單位
+
+  // 日期設定
+  purchaseDate: string; // 購物日期 (YYYY-MM-DD)
+  expiryDate: string; // 過期日期 (YYYY-MM-DD)
+
+  // 低庫存提醒
+  lowStockAlert: boolean; // 開啟通知（預設 true）
+  lowStockThreshold: number; // 低庫存數量通知（預設 2）
+
+  // 備註
+  notes: string; // 備註
 };
 
 function parseJsonFromText(text: string) {
@@ -87,28 +88,44 @@ export async function analyzeImageByUrl(
   const genAI = getClient();
   const model = genAI.getGenerativeModel({ model: MODEL_VISION });
 
+  // Fetch the image from the URL
+  const response = await fetch(imageUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch image from URL: ${response.statusText}`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const base64Image = buffer.toString("base64");
+  const mimeType = response.headers.get("content-type") || "image/jpeg";
+
   const prompt = `
-你是一位食材辨識助理。分析圖片，輸出以下 JSON 結構（僅 JSON）：
+你是一位食材辨識助理。請分析圖片中的食材或食物，並輸出以下 JSON 結構（僅輸出 JSON，不要其他文字）：
+
 {
-  "imageDescription": string,
-  "detectedIngredients": [
-    { "name": string, "confidence": number, "quantity": string, "freshness": string, "notes": string }
-  ],
-  "suggestedCuisines": string[],
-  "suggestedDishes": [
-    { "dishName": string, "requiredAdditionalIngredients": string[] }
-  ],
-  "healthScore": number,
-  "preparationDifficulty": "easy" | "medium" | "hard",
-  "estimatedCookTime": number
+  "productName": string,           // 產品名稱（例如：「鮮奶」、「花椰菜」、「雞蛋」）
+  "category": string,               // 分類（例如：「乳製品飲料類」、「蔬果類」、「肉蛋類」）
+  "attributes": string,             // 屬性（例如：「鮮奶類」、「新鮮類」）
+  "purchaseQuantity": number,       // 建議購買數量（根據圖片中的數量估計，預設為 1）
+  "unit": string,                   // 單位（例如：「瓶」、「顆」、「盒」、「包」、「公斤」）
+  "purchaseDate": string,           // 購買日期（使用今天的日期，格式：YYYY-MM-DD）
+  "expiryDate": string,             // 預計過期日期（根據食材類型合理推估，格式：YYYY-MM-DD）
+  "lowStockAlert": boolean,         // 是否開啟低庫存提醒（預設 true）
+  "lowStockThreshold": number,      // 低庫存數量通知門檻（預設 2）
+  "notes": string                   // 備註（例如：「新鮮度佳」、「請盡快食用」、「冷藏保存」）
 }
-語言使用繁體中文。
+
+請使用繁體中文。今天的日期是 ${new Date().toISOString().split('T')[0]}。
 `;
 
   const result = await model.generateContent([
     { text: prompt },
-    { image_url: imageUrl },
-  ] as any);
+    {
+      inlineData: {
+        mimeType: mimeType,
+        data: base64Image,
+      },
+    },
+  ]);
 
   const text = result.response.text().trim();
   const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/i);
@@ -126,21 +143,22 @@ export async function analyzeLocalImage(
   const imageBytes = fs.readFileSync(filePath);
 
   const prompt = `
-你是一位食材辨識助理。分析圖片，輸出以下 JSON 結構（僅 JSON）：
+你是一位食材辨識助理。請分析圖片中的食材或食物，並輸出以下 JSON 結構（僅輸出 JSON，不要其他文字）：
+
 {
-  "imageDescription": string,
-  "detectedIngredients": [
-    { "name": string, "confidence": number, "quantity": string, "freshness": string, "notes": string }
-  ],
-  "suggestedCuisines": string[],
-  "suggestedDishes": [
-    { "dishName": string, "requiredAdditionalIngredients": string[] }
-  ],
-  "healthScore": number,
-  "preparationDifficulty": "easy" | "medium" | "hard",
-  "estimatedCookTime": number
+  "productName": string,           // 產品名稱（例如：「鮮奶」、「花椰菜」、「雞蛋」）
+  "category": string,               // 分類（例如：「乳製品飲料類」、「蔬果類」、「肉蛋類」）
+  "attributes": string,             // 屬性（例如：「鮮奶類」、「新鮮類」）
+  "purchaseQuantity": number,       // 建議購買數量（根據圖片中的數量估計，預設為 1）
+  "unit": string,                   // 單位（例如：「瓶」、「顆」、「盒」、「包」、「公斤」）
+  "purchaseDate": string,           // 購買日期（使用今天的日期，格式：YYYY-MM-DD）
+  "expiryDate": string,             // 預計過期日期（根據食材類型合理推估，格式：YYYY-MM-DD）
+  "lowStockAlert": boolean,         // 是否開啟低庫存提醒（預設 true）
+  "lowStockThreshold": number,      // 低庫存數量通知門檻（預設 2）
+  "notes": string                   // 備註（例如：「新鮮度佳」、「請盡快食用」、「冷藏保存」）
 }
-語言使用繁體中文。
+
+請使用繁體中文。今天的日期是 ${new Date().toISOString().split('T')[0]}。
 `;
 
   const result = await model.generateContent([
@@ -154,7 +172,7 @@ export async function analyzeLocalImage(
   ]);
 
   const text = result.response.text().trim();
-  const jsonMatch = text.match(/```json\\s*([\\s\\S]*?)\\s*```/i);
+  const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/i);
   const jsonText = jsonMatch ? jsonMatch[1] : text;
   return parseJsonFromText(jsonText);
 }
