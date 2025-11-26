@@ -56,6 +56,27 @@ app.use(express.urlencoded({ extended: true }));
 const openapiPath = path.join(process.cwd(), "openapi.json");
 const openapi = JSON.parse(fs.readFileSync(openapiPath, "utf-8"));
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(openapi));
+// Root route - API info
+app.get("/", (_req, res) => {
+    res.json({
+        name: "Recipe API",
+        version: "1.0.0",
+        description: "Generate recipes and analyze ingredients using Gemini AI",
+        endpoints: {
+            health: "/health",
+            status: "/status",
+            documentation: "/docs",
+            openapi: "/openapi.json",
+            generateRecipe: "POST /api/v1/recipe/generate",
+            analyzeImage: "POST /api/v1/recipe/analyze-image"
+        },
+        recommendation: "Use imageUrl parameter (e.g., Cloudinary) for best performance"
+    });
+});
+// Provide OpenAPI spec as JSON
+app.get("/openapi.json", (_req, res) => {
+    res.json(openapi);
+});
 app.get("/health", (_req, res) => {
     res.json({
         status: "✅ 食譜 API 運行正常",
