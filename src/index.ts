@@ -180,7 +180,7 @@ app.post(
 );
 
 // 本地開發時啟動伺服器
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== 'production' || process.env.npm_lifecycle_event === 'dev') {
   app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
     console.log(`📚 Swagger UI at http://localhost:${PORT}/docs`);
