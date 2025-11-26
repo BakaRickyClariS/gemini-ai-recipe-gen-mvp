@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
-# Build
-dist/
+# Build output (移除 dist/ 以便 Vercel 部署)
+# dist/
 # Env
 .env
 .env.*.local

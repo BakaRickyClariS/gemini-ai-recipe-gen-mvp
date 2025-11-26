@@ -60,6 +60,7 @@
     "/api/v1/recipe/analyze-image": {
       "post": {
         "summary": "Analyze image by file upload or URL",
+        "description": "分析食材圖片並回傳結構化資料。\n\n💡 **最佳實踐（推薦）**：\n- 建議前端先上傳圖片到 Cloudinary 等圖片服務\n- 然後使用 `imageUrl` 參數呼叫此 API\n- 優點：更快的回應時間、更低的成本、更好的擴展性\n\n📋 **備用方式**：\n- 直接檔案上傳（`file`）主要用於開發測試或 Swagger UI 測試\n- 適合不使用外部圖片服務的場景",
         "requestBody": {
           "required": true,
           "content": {
@@ -80,7 +81,9 @@
                 "properties": {
                   "imageUrl": {
                     "type": "string",
-                    "format": "uri"
+                    "format": "uri",
+                    "description": "圖片的公開 URL（推薦使用 Cloudinary 等 CDN）",
+                    "example": "https://res.cloudinary.com/demo/image/upload/sample.jpg"
                   }
                 }
               }

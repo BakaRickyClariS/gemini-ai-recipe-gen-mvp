@@ -13,7 +13,33 @@ import {
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
-const upload = multer({ dest: "uploads/" });
+
+// 智能判斷上傳目錄：
+// - 優先使用 /tmp（serverless 環境標準：Vercel、AWS Lambda、Google Cloud Functions）
+// - 回退到相對路徑（本地開發或 Docker）
+const uploadDir = (() => {
+  try {
+    // 檢查 /tmp 目錄是否存在（適用於所有 serverless 環境）
+    if (fs.existsSync('/tmp')) {
+      return '/tmp/uploads';
+    }
+    // /tmp 不存在，使用相對路徑（本地開發或特殊環境）
+    return 'uploads/';
+  } catch {
+    // 出錯時回退到相對路徑
+    return 'uploads/';
+  }
+})();
+
+// 確保上傳目錄存在
+// - Serverless 環境每次冷啟動時 /tmp 是空的
+// - 本地/Docker 環境首次運行時目錄可能不存在
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+  console.log(`📁 [INFO] 建立上傳目錄: ${uploadDir}`);
+}
+
+const upload = multer({ dest: uploadDir });
 
 app.use(
   cors({
@@ -24,20 +50,16 @@ app.use(
       "http://localhost:3000",
     ],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
+      "Origin"
+    ],
   })
 );
-
-// Explicit OPTIONS handler for preflight requests
-app.options("*", (req, res) => {
-  res.header("Access-Control-Allow-Origin", "https://fufood.vercel.app");
-  res.header("Access-Control-Allow-Methods", "GET,OPTIONS,PATCH,DELETE,POST,PUT");
-  res.header(
-    "Access-Control-Allow-Headers",
-    "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version"
-  );
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.sendStatus(200);
-});
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -45,6 +67,29 @@ app.use(express.urlencoded({ extended: true }));
 const openapiPath = path.join(process.cwd(), "openapi.json");
 const openapi = JSON.parse(fs.readFileSync(openapiPath, "utf-8"));
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(openapi));
+
+// Root route - API info
+app.get("/", (_req, res) => {
+  res.json({
+    name: "Recipe API",
+    version: "1.0.0",
+    description: "Generate recipes and analyze ingredients using Gemini AI",
+    endpoints: {
+      health: "/health",
+      status: "/status",
+      documentation: "/docs",
+      openapi: "/openapi.json",
+      generateRecipe: "POST /api/v1/recipe/generate",
+      analyzeImage: "POST /api/v1/recipe/analyze-image"
+    },
+    recommendation: "Use imageUrl parameter (e.g., Cloudinary) for best performance"
+  });
+});
+
+// Provide OpenAPI spec as JSON
+app.get("/openapi.json", (_req, res) => {
+  res.json(openapi);
+});
 
 app.get("/health", (_req, res) => {
   res.json({
@@ -134,9 +179,13 @@ app.post(
   }
 );
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📚 Swagger UI at http://localhost:${PORT}/docs`);
-});
+// 本地開發時啟動伺服器
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log(`📚 Swagger UI at http://localhost:${PORT}/docs`);
+  });
+}
 
+// 導出 app 供 Vercel serverless function 使用
 export default app;
