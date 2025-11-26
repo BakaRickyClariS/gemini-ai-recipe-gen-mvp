@@ -8,7 +8,31 @@ import swaggerUi from "swagger-ui-express";
 import { generateRecipeFromText, analyzeImageByUrl, analyzeLocalImage, } from "./services/recipeService.js";
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
-const upload = multer({ dest: "uploads/" });
+// 智能判斷上傳目錄：
+// - 優先使用 /tmp（serverless 環境標準：Vercel、AWS Lambda、Google Cloud Functions）
+// - 回退到相對路徑（本地開發或 Docker）
+const uploadDir = (() => {
+    try {
+        // 檢查 /tmp 目錄是否存在（適用於所有 serverless 環境）
+        if (fs.existsSync('/tmp')) {
+            return '/tmp/uploads';
+        }
+        // /tmp 不存在，使用相對路徑（本地開發或特殊環境）
+        return 'uploads/';
+    }
+    catch {
+        // 出錯時回退到相對路徑
+        return 'uploads/';
+    }
+})();
+// 確保上傳目錄存在
+// - Serverless 環境每次冷啟動時 /tmp 是空的
+// - 本地/Docker 環境首次運行時目錄可能不存在
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+    console.log(`📁 [INFO] 建立上傳目錄: ${uploadDir}`);
+}
+const upload = multer({ dest: uploadDir });
 app.use(cors({
     origin: [
         "https://fufood.vercel.app",
@@ -18,6 +42,14 @@ app.use(cors({
     ],
     credentials: true,
 }));
+// Explicit OPTIONS handler for preflight requests
+app.options("*", (req, res) => {
+    res.header("Access-Control-Allow-Origin", "https://fufood.vercel.app");
+    res.header("Access-Control-Allow-Methods", "GET,OPTIONS,PATCH,DELETE,POST,PUT");
+    res.header("Access-Control-Allow-Headers", "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.sendStatus(200);
+});
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 // Load OpenAPI spec
