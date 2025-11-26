@@ -41,15 +41,15 @@ app.use(cors({
         "http://localhost:3000",
     ],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "Accept",
+        "Origin"
+    ],
 }));
-// Explicit OPTIONS handler for preflight requests
-app.options("*", (req, res) => {
-    res.header("Access-Control-Allow-Origin", "https://fufood.vercel.app");
-    res.header("Access-Control-Allow-Methods", "GET,OPTIONS,PATCH,DELETE,POST,PUT");
-    res.header("Access-Control-Allow-Headers", "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version");
-    res.header("Access-Control-Allow-Credentials", "true");
-    res.sendStatus(200);
-});
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 // Load OpenAPI spec
