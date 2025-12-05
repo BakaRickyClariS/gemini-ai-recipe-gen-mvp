@@ -79,8 +79,8 @@ app.get("/", (_req, res) => {
       status: "/status",
       documentation: "/docs",
       openapi: "/openapi.json",
-      generateRecipe: "POST /api/v1/recipe/generate",
-      analyzeImage: "POST /api/v1/recipe/analyze-image"
+      generateRecipe: "POST /api/v1/ai/recipe",
+      analyzeImage: "POST /api/v1/ai/analyze-image"
     },
     recommendation: "Use imageUrl parameter (e.g., Cloudinary) for best performance"
   });
