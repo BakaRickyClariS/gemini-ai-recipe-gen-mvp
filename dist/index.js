@@ -67,8 +67,8 @@ app.get("/", (_req, res) => {
             status: "/status",
             documentation: "/docs",
             openapi: "/openapi.json",
-            generateRecipe: "POST /api/v1/recipe/generate",
-            analyzeImage: "POST /api/v1/recipe/analyze-image"
+            generateRecipe: "POST /api/v1/ai/recipe",
+            analyzeImage: "POST /api/v1/ai/analyze-image"
         },
         recommendation: "Use imageUrl parameter (e.g., Cloudinary) for best performance"
     });
@@ -92,7 +92,7 @@ app.get("/status", (_req, res) => {
     });
 });
 // Generate recipe
-app.post("/api/v1/recipe/generate", async (req, res) => {
+app.post("/api/v1/ai/recipe", async (req, res) => {
     try {
         const { input } = req.body || {};
         if (!input || typeof input !== "string") {
@@ -109,7 +109,7 @@ app.post("/api/v1/recipe/generate", async (req, res) => {
 });
 // Analyze image - either file upload OR imageUrl
 // 圖片分析：可接受本地上傳或 imageUrl
-app.post("/api/v1/recipe/analyze-image", upload.single("file"), async (req, res) => {
+app.post("/api/v1/ai/analyze-image", upload.single("file"), async (req, res) => {
     try {
         const imageUrl = req.body?.imageUrl;
         // ✅ 1️⃣ 有上傳檔案（本地模式）
@@ -155,7 +155,7 @@ app.post("/api/v1/recipe/analyze-image", upload.single("file"), async (req, res)
     }
 });
 // 本地開發時啟動伺服器
-if (process.env.NODE_ENV !== 'production') {
+if (process.env.NODE_ENV !== 'production' || process.env.npm_lifecycle_event === 'dev') {
     app.listen(PORT, () => {
         console.log(`🚀 Server running on http://localhost:${PORT}`);
         console.log(`📚 Swagger UI at http://localhost:${PORT}/docs`);
