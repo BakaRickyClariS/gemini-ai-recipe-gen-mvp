@@ -79,8 +79,8 @@ app.get("/", (_req, res) => {
       status: "/status",
       documentation: "/docs",
       openapi: "/openapi.json",
-      generateRecipe: "POST /api/v1/recipe/generate",
-      analyzeImage: "POST /api/v1/recipe/analyze-image"
+      generateRecipe: "POST /api/v1/ai/recipe",
+      analyzeImage: "POST /api/v1/ai/analyze-image"
     },
     recommendation: "Use imageUrl parameter (e.g., Cloudinary) for best performance"
   });
@@ -108,7 +108,7 @@ app.get("/status", (_req, res) => {
 });
 
 // Generate recipe
-app.post("/api/v1/recipe/generate", async (req, res) => {
+app.post("/api/v1/ai/recipe", async (req, res) => {
   try {
     const { input } = req.body || {};
     if (!input || typeof input !== "string") {
@@ -126,7 +126,7 @@ app.post("/api/v1/recipe/generate", async (req, res) => {
 // Analyze image - either file upload OR imageUrl
 // 圖片分析：可接受本地上傳或 imageUrl
 app.post(
-  "/api/v1/recipe/analyze-image",
+  "/api/v1/ai/analyze-image",
   upload.single("file"),
   async (req, res) => {
     try {
