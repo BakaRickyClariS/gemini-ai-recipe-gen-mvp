@@ -12,6 +12,7 @@ import type {
 } from "../types/aiRecipe.js";
 import type { AIStreamEvent } from "../types/aiStreamEvents.js";
 import { AIRecipeError } from "../middleware/errorHandler.js";
+import { generateRecipeImages } from "./imageGenerationService.js";
 
 // ===== 常數定義 =====
 
@@ -72,13 +73,23 @@ function buildSystemPrompt(request: AIRecipeRequest): string {
   const recipeCount = request.recipeCount || 2;
   const servings = request.servings || 2;
 
-  let prompt = `你是 FuFood.AI，一個專業的食譜生成助手。請根據使用者的需求生成食譜推薦。
+  let prompt = `你是 FuFood.AI，一個專業的食譜生成助手。請根據使用者的需求生成完整的食譜推薦。
 
 回應格式要求：
 1. 先用友善的語氣回應使用者的問題（放在 greeting 欄位）
 2. 根據使用者需求推薦 ${recipeCount} 道食譜
-3. 每道食譜需包含：id（使用 "ai-001" 格式）、name（食譜名稱）、category（料理類型）、servings（${servings} 人份）、cookTime（烹飪時間，分鐘）、imageUrl（先留空字串）
-4. 所有食譜的 isFavorite 預設為 false
+3. 每道食譜需包含完整資訊：
+   - id：使用 "ai-001" 格式
+   - name：食譜名稱
+   - category：料理類型（如：中式、日式、西式、台式、泰式等）
+   - servings：${servings} 人份
+   - cookTime：烹飪時間（分鐘）
+   - difficulty：難易度（簡單、中等、困難）
+   - imageUrl：留空字串，系統會自動生成
+   - isFavorite：false
+   - ingredients：準備材料陣列，每項包含 name（名稱）、amount（數量，如 "3-4"）、unit（單位，如 "條"）
+   - seasonings：調味料陣列，格式同 ingredients
+   - steps：烹煮步驟陣列，每項包含 step（步驟編號）、description（詳細說明）
 
 輸出需符合以下 JSON 結構（僅輸出 JSON，不要加其他文字）：
 {
@@ -90,8 +101,18 @@ function buildSystemPrompt(request: AIRecipeRequest): string {
       "category": "料理類型",
       "servings": ${servings},
       "cookTime": 30,
+      "difficulty": "簡單",
       "imageUrl": "",
-      "isFavorite": false
+      "isFavorite": false,
+      "ingredients": [
+        { "name": "食材名稱", "amount": "數量", "unit": "單位" }
+      ],
+      "seasonings": [
+        { "name": "調味料名稱", "amount": "數量", "unit": "單位" }
+      ],
+      "steps": [
+        { "step": 1, "description": "步驟說明" }
+      ]
     }
   ]
 }`;
@@ -118,10 +139,11 @@ function buildSystemPrompt(request: AIRecipeRequest): string {
     prompt += `\n請避免使用以下食材：${request.excludeIngredients.join("、")}`;
   }
 
-  prompt += "\n\n請使用繁體中文回應。";
+  prompt += "\n\n請使用繁體中文回應。步驟說明要詳細具體，包含時間和技巧提示。";
 
   return prompt;
 }
+
 
 // ===== JSON 解析輔助 =====
 
@@ -194,12 +216,19 @@ export async function generateMultipleRecipes(
     const parsed = parseJsonFromText(text);
 
     // 確保每個 recipe 都有 id
-    const recipes = parsed.recipes.map((recipe, index) => ({
+    let recipes = parsed.recipes.map((recipe) => ({
       ...recipe,
       id: recipe.id || generateRecipeId(),
       imageUrl: recipe.imageUrl || "",
       isFavorite: recipe.isFavorite ?? false,
     }));
+
+    // 生成食譜圖片（非同步，不阻塞回應）
+    try {
+      recipes = await generateRecipeImages(recipes);
+    } catch (imgErr) {
+      console.warn("[AI Recipe] Image generation failed, using empty imageUrl");
+    }
 
     return {
       status: true,

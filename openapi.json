@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Recipe API",
-    "version": "1.0.0",
-    "description": "Generate recipes and analyze ingredients from images using Gemini."
+    "version": "2.0.0",
+    "description": "AI 食譜生成 API - 支援 Gemini AI 多食譜推薦與 SSE Streaming"
   },
   "servers": [
     {
@@ -13,43 +13,221 @@
   "paths": {
     "/health": {
       "get": {
-        "summary": "Health check",
+        "summary": "健康檢查",
+        "tags": ["系統"],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "API 運行正常",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "✅ 食譜 API 運行正常" },
+                    "timestamp": { "type": "string", "format": "date-time" },
+                    "version": { "type": "string", "example": "1.0.0" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status": {
+      "get": {
+        "summary": "系統狀態",
+        "tags": ["系統"],
+        "responses": {
+          "200": {
+            "description": "系統狀態資訊",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "uptime": { "type": "number", "description": "伺服器運行時間（秒）" },
+                    "memory": { "type": "object", "description": "記憶體使用情況" },
+                    "pid": { "type": "integer", "description": "程序 ID" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/recipe/suggestions": {
+      "get": {
+        "summary": "取得預設 Prompt 建議",
+        "tags": ["AI 食譜"],
+        "responses": {
+          "200": {
+            "description": "預設 Prompt 建議列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "ok" },
+                    "data": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "example": ["台灣感性的食物", "晚餐想吃日式", "聖誕節大餐", "想念泰國料理"]
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
     },
     "/api/v1/ai/recipe": {
       "post": {
-        "summary": "Generate recipe from input text",
+        "summary": "AI 食譜生成（標準回應）",
+        "tags": ["AI 食譜"],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "input": {
-                    "type": "string",
-                    "example": "我想用雞肉和番茄做一道簡單的義大利菜"
-                  }
-                },
-                "required": [
-                  "input"
-                ]
+                "$ref": "#/components/schemas/AIRecipeRequest"
               }
             }
           }
         },
+        "parameters": [
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "description": "使用者 ID（用於每日查詢限制）",
+            "schema": { "type": "string" }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Recipe generated",
+            "description": "食譜生成成功",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "$ref": "#/components/schemas/AIRecipeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "請求驗證失敗",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "429": {
+            "description": "超過每日查詢限制",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/recipe/stream": {
+      "post": {
+        "summary": "AI 食譜生成（SSE Streaming）",
+        "description": "使用 Server-Sent Events 即時串流回應，提供更好的使用者體驗",
+        "tags": ["AI 食譜"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIRecipeRequest"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "description": "使用者 ID（用於每日查詢限制）",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE 串流回應",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "SSE 事件串流，包含 start、chunk、progress、done、error 事件"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inventory/ai-selection": {
+      "get": {
+        "summary": "取得庫存食材選擇",
+        "description": "取得使用者庫存中的食材列表，供 AI 食譜生成時選擇使用。需設定 MAIN_BACKEND_URL 環境變數以啟用 Proxy 模式。",
+        "tags": ["庫存"],
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "description": "Bearer Token（Proxy 模式需要）",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "庫存食材列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "boolean" },
+                    "message": { "type": "string" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "categories": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": { "type": "string", "example": "蔬果類" },
+                              "items": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": { "type": "string" },
+                                    "name": { "type": "string" },
+                                    "category": { "type": "string" },
+                                    "quantity": { "type": "integer" },
+                                    "unit": { "type": "string" },
+                                    "tag": { "type": "string", "enum": ["available", "priority"] },
+                                    "priorityReason": { "type": "string" }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "maxSelection": { "type": "integer", "example": 5 }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -59,8 +237,9 @@
     },
     "/api/v1/ai/analyze-image": {
       "post": {
-        "summary": "Analyze image by file upload or URL",
-        "description": "分析食材圖片並回傳結構化資料。\n\n💡 **最佳實踐（推薦）**：\n- 建議前端先上傳圖片到 Cloudinary 等圖片服務\n- 然後使用 `imageUrl` 參數呼叫此 API\n- 優點：更快的回應時間、更低的成本、更好的擴展性\n\n📋 **備用方式**：\n- 直接檔案上傳（`file`）主要用於開發測試或 Swagger UI 測試\n- 適合不使用外部圖片服務的場景",
+        "summary": "分析食材圖片",
+        "description": "分析食材圖片並回傳結構化資料。\n\n💡 **最佳實踐（推薦）**：\n- 建議前端先上傳圖片到 Cloudinary 等圖片服務\n- 然後使用 `imageUrl` 參數呼叫此 API\n- 優點：更快的回應時間、更低的成本、更好的擴展性\n\n📋 **備用方式**：\n- 直接檔案上傳（`file`）主要用於開發測試或 Swagger UI 測試",
+        "tags": ["AI 圖片分析"],
         "requestBody": {
           "required": true,
           "content": {
@@ -70,7 +249,8 @@
                 "properties": {
                   "file": {
                     "type": "string",
-                    "format": "binary"
+                    "format": "binary",
+                    "description": "上傳的圖片檔案"
                   }
                 }
               }
@@ -92,17 +272,176 @@
         },
         "responses": {
           "200": {
-            "description": "Image analysis result",
+            "description": "圖片分析結果",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": { "type": "object" },
+                    "timestamp": { "type": "string", "format": "date-time" }
+                  }
                 }
               }
+            }
+          },
+          "400": {
+            "description": "請求無效（缺少 imageUrl 或 file）"
+          },
+          "500": {
+            "description": "伺服器錯誤"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AIRecipeRequest": {
+        "type": "object",
+        "required": ["prompt"],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "使用者的食譜需求描述",
+            "example": "我想用雞肉和番茄做一道簡單的義大利菜"
+          },
+          "recipeCount": {
+            "type": "integer",
+            "description": "要生成的食譜數量",
+            "default": 2,
+            "minimum": 1,
+            "maximum": 5
+          },
+          "servings": {
+            "type": "integer",
+            "description": "份數",
+            "default": 2
+          },
+          "difficulty": {
+            "type": "string",
+            "description": "難易度偏好",
+            "enum": ["簡單", "中等", "困難"]
+          },
+          "category": {
+            "type": "string",
+            "description": "料理類型偏好",
+            "example": "義式料理"
+          },
+          "selectedIngredients": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "希望使用的食材",
+            "example": ["雞肉", "番茄"]
+          },
+          "excludeIngredients": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "排除的食材",
+            "example": ["花生", "蝦"]
+          }
+        }
+      },
+      "AIRecipeResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "boolean", "example": true },
+          "message": { "type": "string", "example": "ok" },
+          "data": {
+            "type": "object",
+            "properties": {
+              "greeting": {
+                "type": "string",
+                "description": "AI 的友善回應",
+                "example": "您好！根據您的需求，我為您推薦以下食譜..."
+              },
+              "recipes": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/RecipeListItem" }
+              },
+              "aiMetadata": {
+                "type": "object",
+                "properties": {
+                  "generatedAt": { "type": "string", "format": "date-time" },
+                  "model": { "type": "string", "example": "gemini-2.5-flash" }
+                }
+              },
+              "remainingQueries": {
+                "type": "integer",
+                "description": "今日剩餘查詢次數",
+                "example": 2
+              }
+            }
+          }
+        }
+      },
+      "RecipeListItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "ai-001" },
+          "name": { "type": "string", "example": "涼拌小黃瓜" },
+          "category": { "type": "string", "example": "中式" },
+          "servings": { "type": "integer", "example": 1 },
+          "cookTime": { "type": "integer", "description": "烹飪時間（分鐘）", "example": 20 },
+          "difficulty": { "type": "string", "enum": ["簡單", "中等", "困難"], "example": "簡單" },
+          "imageUrl": { "type": "string", "description": "AI 生成的食譜圖片（Base64 Data URL）", "example": "data:image/png;base64,..." },
+          "isFavorite": { "type": "boolean", "example": false },
+          "ingredients": {
+            "type": "array",
+            "description": "準備材料",
+            "items": { "$ref": "#/components/schemas/IngredientItem" }
+          },
+          "seasonings": {
+            "type": "array",
+            "description": "調味料",
+            "items": { "$ref": "#/components/schemas/IngredientItem" }
+          },
+          "steps": {
+            "type": "array",
+            "description": "烹煮步驟",
+            "items": { "$ref": "#/components/schemas/CookingStep" }
+          }
+        }
+      },
+      "IngredientItem": {
+        "type": "object",
+        "description": "食材項目（準備材料或調味料）",
+        "properties": {
+          "name": { "type": "string", "description": "食材名稱", "example": "小黃瓜" },
+          "amount": { "type": "string", "description": "數量", "example": "3-4" },
+          "unit": { "type": "string", "description": "單位", "example": "條" }
+        }
+      },
+      "CookingStep": {
+        "type": "object",
+        "description": "烹煮步驟",
+        "properties": {
+          "step": { "type": "integer", "description": "步驟編號", "example": 1 },
+          "description": { "type": "string", "description": "步驟說明", "example": "將小黃瓜拍扁後切段，用 1/2 茶匙鹽抓勻，靜置 15-20分鐘出水。" }
+        }
+      },
+
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "boolean", "example": false },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string", "example": "AI_001" },
+              "message": { "type": "string" },
+              "details": { "type": "object" }
             }
           }
         }
       }
     }
-  }
+  },
+  "tags": [
+    { "name": "系統", "description": "系統健康狀態相關 API" },
+    { "name": "AI 食譜", "description": "AI 食譜生成相關 API" },
+    { "name": "AI 圖片分析", "description": "圖片分析相關 API" },
+    { "name": "庫存", "description": "庫存食材相關 API" }
+  ]
 }
