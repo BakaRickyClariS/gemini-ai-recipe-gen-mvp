@@ -43,6 +43,24 @@ export type AIRecipeRequest = {
 
 // ===== 回應型別 =====
 
+/** 食材項目（準備材料或調味料） */
+export type IngredientItem = {
+  /** 食材名稱 */
+  name: string;
+  /** 數量（字串格式，如 "3-4" 或 "1/2"） */
+  amount: string;
+  /** 單位（如：條、瓣、根、茶匙、大匙） */
+  unit: string;
+};
+
+/** 烹煮步驟 */
+export type CookingStep = {
+  /** 步驟編號 */
+  step: number;
+  /** 步驟說明 */
+  description: string;
+};
+
 /** 食譜列表項目（供卡片顯示） */
 export type RecipeListItem = {
   id: string;
@@ -52,7 +70,16 @@ export type RecipeListItem = {
   servings: number;
   cookTime: number;
   isFavorite: boolean;
+  /** 難易度 */
+  difficulty?: "簡單" | "中等" | "困難";
+  /** 準備材料 */
+  ingredients?: IngredientItem[];
+  /** 調味料 */
+  seasonings?: IngredientItem[];
+  /** 烹煮步驟 */
+  steps?: CookingStep[];
 };
+
 
 /**
  * AI 食譜生成回應

@@ -5,7 +5,9 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import swaggerUi from "swagger-ui-express";
-import { generateRecipeFromText, analyzeImageByUrl, analyzeLocalImage, } from "./services/recipeService.js";
+import { analyzeImageByUrl, analyzeLocalImage, } from "./services/recipeService.js";
+import { generateMultipleRecipes, streamRecipe, AI_SUGGESTION_PROMPTS, } from "./services/aiRecipeService.js";
+import { aiRecipeErrorHandler, validateAIRecipeRequest, AIRecipeError, } from "./middleware/errorHandler.js";
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 // 智能判斷上傳目錄：
@@ -14,15 +16,15 @@ const PORT = Number(process.env.PORT || 3000);
 const uploadDir = (() => {
     try {
         // 檢查 /tmp 目錄是否存在（適用於所有 serverless 環境）
-        if (fs.existsSync('/tmp')) {
-            return '/tmp/uploads';
+        if (fs.existsSync("/tmp")) {
+            return "/tmp/uploads";
         }
         // /tmp 不存在，使用相對路徑（本地開發或特殊環境）
-        return 'uploads/';
+        return "uploads/";
     }
     catch {
         // 出錯時回退到相對路徑
-        return 'uploads/';
+        return "uploads/";
     }
 })();
 // 確保上傳目錄存在
@@ -47,7 +49,7 @@ app.use(cors({
         "Authorization",
         "X-Requested-With",
         "Accept",
-        "Origin"
+        "Origin",
     ],
 }));
 app.use(express.json());
@@ -60,17 +62,24 @@ app.use("/docs", swaggerUi.serve, swaggerUi.setup(openapi));
 app.get("/", (_req, res) => {
     res.json({
         name: "Recipe API",
-        version: "1.0.0",
-        description: "Generate recipes and analyze ingredients using Gemini AI",
+        version: "2.0.0",
+        description: "AI 食譜生成 API - 支援 Gemini AI 多食譜推薦與 SSE Streaming",
         endpoints: {
             health: "/health",
             status: "/status",
             documentation: "/docs",
             openapi: "/openapi.json",
             generateRecipe: "POST /api/v1/ai/recipe",
-            analyzeImage: "POST /api/v1/ai/analyze-image"
+            streamRecipe: "POST /api/v1/ai/recipe/stream",
+            recipeSuggestions: "GET /api/v1/ai/recipe/suggestions",
+            inventorySelection: "GET /api/v1/inventory/ai-selection",
+            analyzeImage: "POST /api/v1/ai/analyze-image",
         },
-        recommendation: "Use imageUrl parameter (e.g., Cloudinary) for best performance"
+        features: {
+            multipleRecipes: "支援一次產生多道食譜推薦",
+            sseStreaming: "支援 Server-Sent Events 即時串流",
+            dailyLimit: "每日查詢次數限制",
+        },
     });
 });
 // Provide OpenAPI spec as JSON
@@ -91,20 +100,127 @@ app.get("/status", (_req, res) => {
         pid: process.pid,
     });
 });
-// Generate recipe
-app.post("/api/v1/ai/recipe", async (req, res) => {
+// ===== AI 食譜生成 API（新版）=====
+// 取得預設 prompt 建議
+app.get("/api/v1/ai/recipe/suggestions", (_req, res) => {
+    res.json({
+        status: true,
+        message: "ok",
+        data: AI_SUGGESTION_PROMPTS,
+    });
+});
+// 多食譜生成（標準回應）
+app.post("/api/v1/ai/recipe", async (req, res, next) => {
     try {
-        const { input } = req.body || {};
-        if (!input || typeof input !== "string") {
-            return res.status(400).json({ success: false, error: "Missing input" });
-        }
-        const data = await generateRecipeFromText(input);
-        res.json({ success: true, data, timestamp: new Date().toISOString() });
+        const body = req.body;
+        // 驗證請求
+        validateAIRecipeRequest(body.prompt);
+        // 取得使用者 ID（如有認證系統，可從 token 取得）
+        const userId = req.headers["x-user-id"] || "anonymous";
+        const response = await generateMultipleRecipes(body, userId);
+        res.json(response);
     }
     catch (err) {
-        res
-            .status(500)
-            .json({ success: false, error: err?.message || "Internal error" });
+        next(err);
+    }
+});
+// SSE Streaming 食譜生成
+app.post("/api/v1/ai/recipe/stream", async (req, res) => {
+    try {
+        const body = req.body;
+        // 驗證請求
+        validateAIRecipeRequest(body.prompt);
+        const userId = req.headers["x-user-id"] || "anonymous";
+        // 設置 SSE headers
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+        res.setHeader("X-Accel-Buffering", "no"); // Nginx buffering 關閉
+        // 串流回應
+        for await (const event of streamRecipe(body, userId)) {
+            res.write(`event: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`);
+        }
+        res.end();
+    }
+    catch (err) {
+        // SSE 錯誤回應
+        if (err instanceof AIRecipeError) {
+            res.write(`event: error\ndata: ${JSON.stringify(err.toResponse())}\n\n`);
+        }
+        else {
+            res.write(`event: error\ndata: ${JSON.stringify({
+                code: "AI_005",
+                message: err.message,
+            })}\n\n`);
+        }
+        res.end();
+    }
+});
+// 庫存食材選擇 API（Proxy 模式佔位，需設定主應用後端 URL）
+app.get("/api/v1/inventory/ai-selection", async (req, res) => {
+    const backendUrl = process.env.MAIN_BACKEND_URL;
+    if (!backendUrl) {
+        // 未設定後端 URL 時回傳 mock 資料
+        return res.json({
+            status: true,
+            message: "mock data - 請設定 MAIN_BACKEND_URL 環境變數以啟用 Proxy 模式",
+            data: {
+                categories: [
+                    {
+                        name: "蔬果類",
+                        items: [
+                            {
+                                id: "1",
+                                name: "番茄",
+                                category: "蔬果類",
+                                quantity: 5,
+                                unit: "顆",
+                                tag: "available",
+                            },
+                            {
+                                id: "2",
+                                name: "洋蔥",
+                                category: "蔬果類",
+                                quantity: 2,
+                                unit: "顆",
+                                tag: "priority",
+                                priorityReason: "3天後過期",
+                            },
+                        ],
+                    },
+                    {
+                        name: "肉蛋類",
+                        items: [
+                            {
+                                id: "3",
+                                name: "雞蛋",
+                                category: "肉蛋類",
+                                quantity: 10,
+                                unit: "顆",
+                                tag: "available",
+                            },
+                        ],
+                    },
+                ],
+                maxSelection: 5,
+            },
+        });
+    }
+    try {
+        // Proxy 到主應用後端
+        const authHeader = req.headers.authorization;
+        const response = await fetch(`${backendUrl}/api/v1/inventory/ai-selection`, {
+            headers: authHeader ? { Authorization: authHeader } : {},
+        });
+        const data = await response.json();
+        res.status(response.status).json(data);
+    }
+    catch (err) {
+        res.status(502).json({
+            status: false,
+            message: "無法連接到主應用後端",
+            error: err.message,
+        });
     }
 });
 // Analyze image - either file upload OR imageUrl
@@ -154,8 +270,11 @@ app.post("/api/v1/ai/analyze-image", upload.single("file"), async (req, res) => 
         });
     }
 });
+// 錯誤處理中介層
+app.use(aiRecipeErrorHandler);
 // 本地開發時啟動伺服器
-if (process.env.NODE_ENV !== 'production' || process.env.npm_lifecycle_event === 'dev') {
+if (process.env.NODE_ENV !== "production" ||
+    process.env.npm_lifecycle_event === "dev") {
     app.listen(PORT, () => {
         console.log(`🚀 Server running on http://localhost:${PORT}`);
         console.log(`📚 Swagger UI at http://localhost:${PORT}/docs`);
