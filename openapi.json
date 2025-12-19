@@ -174,57 +174,42 @@
         }
       }
     },
-    "/api/v1/inventory/ai-selection": {
-      "get": {
-        "summary": "取得庫存食材選擇",
-        "description": "取得使用者庫存中的食材列表，供 AI 食譜生成時選擇使用。需設定 MAIN_BACKEND_URL 環境變數以啟用 Proxy 模式。",
-        "tags": ["庫存"],
-        "parameters": [
-          {
-            "name": "Authorization",
-            "in": "header",
-            "description": "Bearer Token（Proxy 模式需要）",
-            "schema": { "type": "string" }
+    "/api/v1/media/upload": {
+      "post": {
+        "summary": "上傳圖片檔案",
+        "description": "將圖片檔案上傳至雲端儲存空間（Cloudinary）並獲取公開 URL。",
+        "tags": ["媒體上傳"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "要上傳的圖片檔案"
+                  }
+                }
+              }
+            }
           }
-        ],
+        },
         "responses": {
           "200": {
-            "description": "庫存食材列表",
+            "description": "上傳成功",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "boolean" },
-                    "message": { "type": "string" },
+                    "success": { "type": "boolean", "example": true },
                     "data": {
                       "type": "object",
                       "properties": {
-                        "categories": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "name": { "type": "string", "example": "蔬果類" },
-                              "items": {
-                                "type": "array",
-                                "items": {
-                                  "type": "object",
-                                  "properties": {
-                                    "id": { "type": "string" },
-                                    "name": { "type": "string" },
-                                    "category": { "type": "string" },
-                                    "quantity": { "type": "integer" },
-                                    "unit": { "type": "string" },
-                                    "tag": { "type": "string", "enum": ["available", "priority"] },
-                                    "priorityReason": { "type": "string" }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        },
-                        "maxSelection": { "type": "integer", "example": 5 }
+                        "url": { "type": "string", "example": "https://res.cloudinary.com/..." },
+                        "publicId": { "type": "string", "example": "fufood/..." }
                       }
                     }
                   }
@@ -251,6 +236,11 @@
                     "type": "string",
                     "format": "binary",
                     "description": "上傳的圖片檔案"
+                  },
+                  "imageUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "圖片的公開 URL"
                   }
                 }
               }
@@ -279,7 +269,22 @@
                   "type": "object",
                   "properties": {
                     "success": { "type": "boolean" },
-                    "data": { "type": "object" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "productName": { "type": "string" },
+                        "category": { "type": "string" },
+                        "attributes": { "type": "string" },
+                        "purchaseQuantity": { "type": "number" },
+                        "unit": { "type": "string" },
+                        "purchaseDate": { "type": "string" },
+                        "expiryDate": { "type": "string" },
+                        "lowStockAlert": { "type": "boolean" },
+                        "lowStockThreshold": { "type": "number" },
+                        "notes": { "type": "string" },
+                        "imageUrl": { "type": "string", "nullable": true }
+                      }
+                    },
                     "timestamp": { "type": "string", "format": "date-time" }
                   }
                 }

@@ -70,6 +70,7 @@ type AnalyzeImageResult = {
 
   // 備註
   notes: string; // 備註
+  imageUrl?: string | null; // 圖片 URL
 };
 
 function parseJsonFromText(text: string) {
