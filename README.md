@@ -31,7 +31,14 @@ recipe-api/
 # 編輯 .env.local 文件，添加你的 Google API Key
 # 前往 https://aistudio.google.com/app/apikeys 獲取免費密鑰
 
-GOOGLE_API_KEY=your_key_here
+GOOGL_API_KEY=your_key_here
+
+# 添加 Cloudinary 設定 (用於圖片上傳)
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+# 或使用 Upload Preset (可選)
+CLOUDINARY_UPLOAD_PRESET=your_preset
 ```
 
 ### 步驟 1️⃣: 置環境變數
@@ -134,7 +141,26 @@ curl -X POST http://localhost:8080/api/v1/recipe/generate \
 }
 ```
 
-### 2. 分析圖片食材
+### 2. 上傳圖片 (新增)
+
+```bash
+curl -X POST http://localhost:8080/api/v1/media/upload \
+  -F "file=@path/to/image.jpg"
+```
+
+**成功回應:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://res.cloudinary.com/...",
+    "publicId": "fufood/..."
+  }
+}
+```
+
+### 3. 分析圖片食材
 
 **方式 A: 上傳圖片檔案**
 
@@ -189,7 +215,7 @@ curl -X POST http://localhost:8080/api/v1/recipe/analyze-image \
 }
 ```
 
-### 3. 健康檢查
+### 4. 健康檢查
 
 ```bash
 curl http://localhost:8080/health
@@ -299,9 +325,12 @@ docker-compose up -d --build
 
 ## 📋 環境變數說明
 
-| 變數名           | 必需 | 預設值      | 說明                              |
-| ---------------- | ---- | ----------- | --------------------------------- |
-| `GOOGLE_API_KEY` | ✅   | -           | Google Gemini API 密鑰            |
+| 變數名 | 必需 | 預設值 | 說明 |
+| --- | --- | --- | --- |
+| `GOOGLE_API_KEY` | ✅ | - | Google Gemini API 密鑰 |
+| `CLOUDINARY_CLOUD_NAME` | ✅ | - | Cloudinary Cloud Name |
+| `CLOUDINARY_API_KEY` | ⚠️ | - | Cloudinary API Key |
+| `CLOUDINARY_API_SECRET` | ⚠️ | - | Cloudinary API Secret |
 | `PORT`           | ❌   | 3000        | Node.js 監聽端口                  |
 | `NODE_ENV`       | ❌   | development | 執行環境 (development/production) |
 
