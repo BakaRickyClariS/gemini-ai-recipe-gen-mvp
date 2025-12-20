@@ -26,10 +26,10 @@
 
 前端採用雙 API 架構，區分為 **AI API** 和 **Backend API**：
 
-| API 類型 | 環境變數 | 用途 |
-|----------|----------|------|
-| **AI API** | `VITE_AI_API_BASE_URL` | OCR 辨識、AI 食譜生成、**媒體上傳** |
-| **Backend API** | `VITE_BACKEND_API_BASE_URL` | 使用者認證、庫存管理、群組管理等 |
+| API 類型        | 環境變數                    | 用途                                |
+| --------------- | --------------------------- | ----------------------------------- |
+| **AI API**      | `VITE_AI_API_BASE_URL`      | OCR 辨識、AI 食譜生成、**媒體上傳** |
+| **Backend API** | `VITE_BACKEND_API_BASE_URL` | 使用者認證、庫存管理、群組管理等    |
 
 ### Base URL 設定
 
@@ -47,9 +47,9 @@ VITE_AI_API_BASE_URL=http://localhost:3000/api/v1
 
 ### 端點資訊
 
-| Method | Path | 功能 | 備註 |
-|--------|------|------|------|
-| POST | `/api/v1/media/upload` | 上傳圖片/檔案 | 回傳 CDN URL |
+| Method | Path                   | 功能          | 備註         |
+| ------ | ---------------------- | ------------- | ------------ |
+| POST   | `/api/v1/media/upload` | 上傳圖片/檔案 | 回傳 CDN URL |
 
 ### 請求格式
 
@@ -60,9 +60,9 @@ Content-Type: multipart/form-data
 
 **FormData 欄位**:
 
-| 欄位 | 類型 | 必填 | 說明 |
-|------|------|------|------|
-| `file` | File/Blob | ✅ | 要上傳的圖片檔案 |
+| 欄位   | 類型      | 必填 | 說明             |
+| ------ | --------- | ---- | ---------------- |
+| `file` | File/Blob | ✅   | 要上傳的圖片檔案 |
 
 ### 回應格式
 
@@ -70,7 +70,7 @@ Content-Type: multipart/form-data
 
 ```typescript
 type UploadSuccessResponse = {
-  success: boolean;  // true
+  success: boolean; // true
   data: {
     /** 上傳後的公開 URL（CDN 優化） */
     url: string;
@@ -94,13 +94,13 @@ type UploadSuccessResponse = {
 
 #### 錯誤回應
 
-| HTTP Status | 錯誤代碼 | 說明 |
-|-------------|----------|------|
-| 400 | `MEDIA_001` | 未提供檔案 |
-| 400 | `MEDIA_002` | 檔案類型不支援 |
-| 413 | `MEDIA_003` | 檔案過大（建議上限 10MB） |
-| 401 | `MEDIA_004` | 未授權 |
-| 500 | `MEDIA_005` | 上傳失敗（Cloudinary 錯誤） |
+| HTTP Status | 錯誤代碼    | 說明                        |
+| ----------- | ----------- | --------------------------- |
+| 400         | `MEDIA_001` | 未提供檔案                  |
+| 400         | `MEDIA_002` | 檔案類型不支援              |
+| 413         | `MEDIA_003` | 檔案過大（建議上限 10MB）   |
+| 401         | `MEDIA_004` | 未授權                      |
+| 500         | `MEDIA_005` | 上傳失敗（Cloudinary 錯誤） |
 
 **錯誤回應格式**:
 
@@ -146,7 +146,7 @@ export async function uploadToCloudinary(file: Buffer, filename: string) {
       (error, result) => {
         if (error) reject(error);
         else resolve(result);
-      }
+      },
     );
 
     Readable.from(file).pipe(uploadStream);
@@ -169,7 +169,7 @@ export async function POST(req: Request) {
   if (!file) {
     return Response.json(
       { success: false, code: 'MEDIA_001', message: '未提供檔案' },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -178,13 +178,16 @@ export async function POST(req: Request) {
   if (!allowedTypes.includes(file.mimetype || '')) {
     return Response.json(
       { success: false, code: 'MEDIA_002', message: '不支援的檔案類型' },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   try {
-    const result = await uploadToCloudinary(file.filepath, file.originalFilename);
-    
+    const result = await uploadToCloudinary(
+      file.filepath,
+      file.originalFilename,
+    );
+
     return Response.json({
       success: true,
       data: {
@@ -196,7 +199,7 @@ export async function POST(req: Request) {
     console.error('Upload error:', error);
     return Response.json(
       { success: false, code: 'MEDIA_005', message: '上傳失敗' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -208,9 +211,9 @@ export async function POST(req: Request) {
 
 ### 端點資訊
 
-| Method | Path | 功能 |
-|--------|------|------|
-| POST | `/api/v1/ai/analyze-image` | OCR / 食材結構化辨識 |
+| Method | Path                       | 功能                 |
+| ------ | -------------------------- | -------------------- |
+| POST   | `/api/v1/ai/analyze-image` | OCR / 食材結構化辨識 |
 
 ### 請求格式
 
@@ -227,18 +230,18 @@ export async function POST(req: Request) {
   "success": true,
   "data": {
     "productName": "蘋果",
-    "category": "水果",
-    "attributes": "常溫",
+    "category": "蔬果類",
+    "attributes": "水果類",
     "purchaseQuantity": 1,
     "unit": "顆",
-    "purchaseDate": "2025-12-19",
-    "expiryDate": "2025-12-26",
+    "purchaseDate": "2025-12-20",
+    "expiryDate": "2025-12-27",
     "lowStockAlert": true,
     "lowStockThreshold": 2,
     "notes": "",
     "imageUrl": "https://res.cloudinary.com/xxx/image/upload/v123/fufood/abc.jpg"
   },
-  "timestamp": "2025-12-19T10:00:00Z"
+  "timestamp": "2025-12-20T10:00:00Z"
 }
 ```
 
@@ -250,10 +253,10 @@ export async function POST(req: Request) {
 
 ### 端點資訊
 
-| Method | Path | 功能 |
-|--------|------|------|
-| POST | `/api/v1/ai/recipe` | AI 產生食譜推薦 |
-| POST | `/api/v1/ai/recipe/stream` | AI 產生食譜（SSE Streaming） |
+| Method | Path                       | 功能                         |
+| ------ | -------------------------- | ---------------------------- |
+| POST   | `/api/v1/ai/recipe`        | AI 產生食譜推薦              |
+| POST   | `/api/v1/ai/recipe/stream` | AI 產生食譜（SSE Streaming） |
 
 ---
 
@@ -290,12 +293,15 @@ export const mediaApi = {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await aiApi.post<UploadResponse>('/media/upload', formData);
-    
+    const response = await aiApi.post<UploadResponse>(
+      '/media/upload',
+      formData,
+    );
+
     if (response.success && response.data?.url) {
       return response.data.url;
     }
-    
+
     throw new Error('Upload failed: No URL returned');
   },
 };
@@ -355,18 +361,18 @@ VITE_BACKEND_API_BASE_URL=https://api.fufood.jocelynh.me
 
 ## 附錄：API 路由總表
 
-| # | 模組 | Method | Path | 功能 |
-|---|------|--------|------|------|
-| 51 | AI | POST | `/api/v1/ai/analyze-image` | OCR/影像辨識 |
-| 52 | AI | POST | `/api/v1/ai/recipe` | AI 產生食譜 |
-| 52a | AI | POST | `/api/v1/ai/recipe/stream` | AI 產生食譜 (SSE) |
-| 57 | Media | POST | `/api/v1/media/upload` | 上傳圖片 |
+| #   | 模組  | Method | Path                       | 功能              |
+| --- | ----- | ------ | -------------------------- | ----------------- |
+| 51  | AI    | POST   | `/api/v1/ai/analyze-image` | OCR/影像辨識      |
+| 52  | AI    | POST   | `/api/v1/ai/recipe`        | AI 產生食譜       |
+| 52a | AI    | POST   | `/api/v1/ai/recipe/stream` | AI 產生食譜 (SSE) |
+| 57  | Media | POST   | `/api/v1/media/upload`     | 上傳圖片          |
 
 ---
 
 ## 變更歷史
 
-| 版本 | 日期 | 說明 |
-|------|------|------|
+| 版本 | 日期       | 說明                                                           |
+| ---- | ---------- | -------------------------------------------------------------- |
 | v2.0 | 2025-12-19 | 媒體上傳遷移至 AI API，整合 `mediaApi.ts`，移除 `uploadApi.ts` |
-| v1.0 | 2025-12-08 | 初版 |
+| v1.0 | 2025-12-08 | 初版                                                           |

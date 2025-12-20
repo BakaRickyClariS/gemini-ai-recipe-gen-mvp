@@ -6,7 +6,8 @@ import path from "path";
 import fs from "fs";
 import swaggerUi from "swagger-ui-express";
 import { analyzeImageByUrl, analyzeLocalImage, } from "./services/recipeService.js";
-import { aiRecipeErrorHandler, } from "./middleware/errorHandler.js";
+import { generateMultipleRecipes, streamRecipe, AI_SUGGESTION_PROMPTS, } from "./services/aiRecipeService.js";
+import { aiRecipeErrorHandler, validateAIRecipeRequest, } from "./middleware/errorHandler.js";
 import { uploadToCloudinary } from "./services/mediaService.js";
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -101,8 +102,62 @@ app.get("/status", (_req, res) => {
     });
 });
 // ===== AI 食譜生成 API（新版）=====
-// ... (省略中間部分以保持 replace 範圍準確) 
-// 1. 媒體上傳 API
+// 1. AI 食譜生成（標準回應）
+app.post("/api/v1/ai/recipe", validateAIRecipeRequest, async (req, res, next) => {
+    try {
+        const request = req.body;
+        const userId = req.headers["x-user-id"] || "anonymous";
+        const response = await generateMultipleRecipes(request, userId);
+        return res.json(response);
+    }
+    catch (err) {
+        next(err);
+    }
+});
+// 2. AI 食譜生成（SSE Streaming）
+app.post("/api/v1/ai/recipe/stream", validateAIRecipeRequest, async (req, res) => {
+    const request = req.body;
+    const userId = req.headers["x-user-id"] || "anonymous";
+    // 設定 SSE headers
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no"); // 禁用 Nginx 緩衝
+    try {
+        for await (const event of streamRecipe(request, userId)) {
+            res.write(`event: ${event.event}\n`);
+            res.write(`data: ${JSON.stringify(event)}\n\n`);
+        }
+    }
+    catch (err) {
+        const errorEvent = {
+            id: `evt-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            event: "error",
+            data: {
+                code: err.code || "AI_005",
+                message: err.message || "AI 服務暫時無法使用",
+            },
+        };
+        res.write(`event: error\n`);
+        res.write(`data: ${JSON.stringify(errorEvent)}\n\n`);
+    }
+    finally {
+        res.end();
+    }
+});
+// 3. 取得預設 Prompt 建議
+app.get("/api/v1/ai/recipe/suggestions", (_req, res) => {
+    res.json({
+        status: true,
+        message: "ok",
+        data: {
+            suggestions: AI_SUGGESTION_PROMPTS,
+        },
+    });
+});
+// ===== 媒體與影像辨識 API =====
+// 4. 媒體上傳 API
 app.post("/api/v1/media/upload", upload.single("file"), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({
@@ -129,12 +184,12 @@ app.post("/api/v1/media/upload", upload.single("file"), async (req, res) => {
         });
     }
     catch (error) {
-        console.error('Upload error:', error);
+        console.error("Upload error:", error);
         return res.status(500).json({
             success: false,
             code: "MEDIA_005",
             message: "上傳失敗",
-            details: error.message
+            details: error.message,
         });
     }
 });
@@ -170,7 +225,7 @@ app.post("/api/v1/ai/analyze-image", upload.single("file"), async (req, res) => 
                 success: true,
                 data: {
                     ...data,
-                    imageUrl: finalImageUrl || null // 加入實體 URL
+                    imageUrl: finalImageUrl || null, // 加入實體 URL
                 },
                 timestamp: new Date().toISOString(),
             });
@@ -182,7 +237,7 @@ app.post("/api/v1/ai/analyze-image", upload.single("file"), async (req, res) => 
                 success: true,
                 data: {
                     ...data,
-                    imageUrl: finalImageUrl
+                    imageUrl: finalImageUrl,
                 },
                 timestamp: new Date().toISOString(),
             });
