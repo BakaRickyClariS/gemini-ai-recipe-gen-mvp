@@ -144,13 +144,15 @@ function buildSystemPrompt(request: AIRecipeRequest): string {
   return prompt;
 }
 
-
 // ===== JSON 解析輔助 =====
 
 function parseJsonFromText(text: string): {
   greeting: string;
   recipes: RecipeListItem[];
 } {
+  console.log("[AI Recipe] Raw response length:", text.length);
+  console.log("[AI Recipe] Raw response preview:", text.substring(0, 500));
+
   // 移除 code fence
   const fence = text.match(/```json\s*([\s\S]*?)\s*```/i);
   const raw = fence ? fence[1] : text;
@@ -162,9 +164,16 @@ function parseJsonFromText(text: string): {
     start !== -1 && end !== -1 && end > start ? raw.slice(start, end + 1) : raw;
 
   try {
-    return JSON.parse(sliced);
-  } catch {
-    // 解析失敗，回傳預設結構
+    const parsed = JSON.parse(sliced);
+    console.log(
+      "[AI Recipe] Parsed successfully, recipes count:",
+      parsed.recipes?.length || 0
+    );
+    return parsed;
+  } catch (err: any) {
+    // 解析失敗，輸出詳細錯誤
+    console.error("[AI Recipe] JSON parse error:", err.message);
+    console.error("[AI Recipe] Failed to parse:", sliced.substring(0, 300));
     return {
       greeting: "抱歉，食譜生成時發生錯誤，請稍後再試。",
       recipes: [],
@@ -206,7 +215,7 @@ export async function generateMultipleRecipes(
         temperature: 0.7,
         topK: 40,
         topP: 0.95,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 4096,
       },
     });
 
@@ -246,8 +255,16 @@ export async function generateMultipleRecipes(
   } catch (err: any) {
     clearTimeout(timeoutId);
 
+    console.error("[AI Recipe] Error occurred:", err.message);
+    console.error("[AI Recipe] Error stack:", err.stack);
+
     if (err.name === "AbortError") {
       throw new AIRecipeError("AI_006");
+    }
+
+    // 如果已經是 AIRecipeError，直接重新拋出
+    if (err instanceof AIRecipeError) {
+      throw err;
     }
 
     throw new AIRecipeError("AI_005", { originalError: err.message });
@@ -293,7 +310,7 @@ export async function* streamRecipe(
         temperature: 0.7,
         topK: 40,
         topP: 0.95,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 4096,
       },
     });
 

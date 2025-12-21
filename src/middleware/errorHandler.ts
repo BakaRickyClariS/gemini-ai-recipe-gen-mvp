@@ -72,19 +72,32 @@ export function aiRecipeErrorHandler(
   } satisfies AIRecipeErrorResponse);
 }
 
-// ===== 驗證函式 =====
+// ===== 驗證中介層 =====
 
 const PROMPT_MAX_LENGTH = 1000;
 
-export function validateAIRecipeRequest(prompt: unknown): void {
+/**
+ * Express 中介層：驗證 AI 食譜請求
+ */
+export function validateAIRecipeRequest(
+  req: Request,
+  _res: Response,
+  next: NextFunction
+): void {
+  const prompt = req.body?.prompt;
+
   if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
-    throw new AIRecipeError("AI_001");
+    return next(new AIRecipeError("AI_001"));
   }
 
   if (prompt.length > PROMPT_MAX_LENGTH) {
-    throw new AIRecipeError("AI_002", {
-      maxLength: PROMPT_MAX_LENGTH,
-      actualLength: prompt.length,
-    });
+    return next(
+      new AIRecipeError("AI_002", {
+        maxLength: PROMPT_MAX_LENGTH,
+        actualLength: prompt.length,
+      })
+    );
   }
+
+  next();
 }
