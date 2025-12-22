@@ -81,6 +81,17 @@ const openapiPath = path.join(process.cwd(), "openapi.json");
 const openapi = JSON.parse(fs.readFileSync(openapiPath, "utf-8"));
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(openapi));
 
+// Swagger UI（CDN 版本）- 適用於 Vercel Serverless 環境
+// 使用 CDN 載入靜態資源，避免 Vercel 上 CSS/JS 無法載入的問題
+const swaggerCdnOptions = {
+  customCssUrl: "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
+  customJs: [
+    "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
+    "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js",
+  ],
+};
+app.use("/docs-cdn", swaggerUi.serve, swaggerUi.setup(openapi, swaggerCdnOptions));
+
 // Root route - API info
 app.get("/", (_req, res) => {
   res.json({
@@ -90,7 +101,7 @@ app.get("/", (_req, res) => {
     endpoints: {
       health: "/health",
       status: "/status",
-      documentation: "/docs",
+      documentation: "/docs (本地開發) 或 /docs-cdn (Vercel 部署)",
       openapi: "/openapi.json",
       generateRecipe: "POST /api/v1/ai/recipe",
       streamRecipe: "POST /api/v1/ai/recipe/stream",
