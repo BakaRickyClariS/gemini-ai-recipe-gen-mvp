@@ -1,9 +1,9 @@
 /**
  * AI 食譜生成服務
  * 對應 docs/ai_recipe_api_spec.md 規格
+ * 支援自動 fallback 機制
  */
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { v4 as uuidv4 } from "uuid";
 import type {
   AIRecipeRequest,
@@ -13,25 +13,17 @@ import type {
 import type { AIStreamEvent } from "../types/aiStreamEvents.js";
 import { AIRecipeError } from "../middleware/errorHandler.js";
 import { generateRecipeImages } from "./imageGenerationService.js";
+import {
+  executeWithFallback,
+  getModelWithFallback,
+} from "./modelClient.js";
 
 // ===== 常數定義 =====
-
-const MODEL_NAME = "gemini-2.5-flash";
 const AI_DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT) || 3;
 const AI_REQUEST_TIMEOUT = Number(process.env.AI_REQUEST_TIMEOUT) || 30000;
 
 // 簡易的每日查詢次數追蹤（生產環境應使用 Redis 或資料庫）
 const userQueryCount = new Map<string, { count: number; date: string }>();
-
-// ===== 輔助函式 =====
-
-function getClient() {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (!apiKey) {
-    throw new AIRecipeError("AI_005", { reason: "Missing API key" });
-  }
-  return new GoogleGenerativeAI(apiKey);
-}
 
 function getTodayDate(): string {
   return new Date().toISOString().split("T")[0];
@@ -184,7 +176,7 @@ function parseJsonFromText(text: string): {
 // ===== 主要 API 函式 =====
 
 /**
- * 產生多個食譜推薦
+ * 產生多個食譜推薦（支援自動 fallback）
  */
 export async function generateMultipleRecipes(
   request: AIRecipeRequest,
@@ -192,9 +184,6 @@ export async function generateMultipleRecipes(
 ): Promise<AIRecipeResponse> {
   // 檢查查詢限制
   const remainingQueries = checkAndUpdateQueryLimit(userId);
-
-  const genAI = getClient();
-  const model = genAI.getGenerativeModel({ model: MODEL_NAME });
 
   const systemPrompt = buildSystemPrompt(request);
   const userPrompt = request.prompt;
@@ -204,19 +193,22 @@ export async function generateMultipleRecipes(
   const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT);
 
   try {
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: systemPrompt + "\n\n使用者輸入：" + userPrompt }],
+    // 使用 fallback 機制執行 AI 請求
+    const { result, modelUsed, apiKeyIndex } = await executeWithFallback("recipe", async (model) => {
+      return await model.generateContent({
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: systemPrompt + "\n\n使用者輸入：" + userPrompt }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 4096,
         },
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 4096,
-      },
+      });
     });
 
     clearTimeout(timeoutId);
@@ -247,7 +239,8 @@ export async function generateMultipleRecipes(
         recipes,
         aiMetadata: {
           generatedAt: new Date().toISOString(),
-          model: MODEL_NAME,
+          model: modelUsed,
+          apiKeyUsed: apiKeyIndex + 1, // 安全：只顯示 Key 編號，不顯示實際值
         },
         remainingQueries,
       },
@@ -273,6 +266,7 @@ export async function generateMultipleRecipes(
 
 /**
  * SSE Streaming 生成食譜
+ * 注意：Streaming 模式使用主模型，不支援自動 fallback
  */
 export async function* streamRecipe(
   request: AIRecipeRequest,
@@ -281,6 +275,9 @@ export async function* streamRecipe(
   const sessionId = uuidv4();
   const remainingQueries = checkAndUpdateQueryLimit(userId);
 
+  // 取得模型（Streaming 暫不支援自動 fallback）
+  const { model, modelName } = getModelWithFallback("recipe");
+
   // 發送開始事件
   yield {
     id: `evt-${Date.now()}`,
@@ -288,12 +285,9 @@ export async function* streamRecipe(
     event: "start",
     data: {
       sessionId,
-      model: MODEL_NAME,
+      model: modelName,
     },
   };
-
-  const genAI = getClient();
-  const model = genAI.getGenerativeModel({ model: MODEL_NAME });
 
   const systemPrompt = buildSystemPrompt(request);
   const userPrompt = request.prompt;
@@ -365,7 +359,7 @@ export async function* streamRecipe(
         recipes,
         aiMetadata: {
           generatedAt: new Date().toISOString(),
-          model: MODEL_NAME,
+          model: modelName,
         },
         remainingQueries,
       },

@@ -1,25 +1,17 @@
 /**
  * AI 食譜生成服務
  * 對應 docs/ai_recipe_api_spec.md 規格
+ * 支援自動 fallback 機制
  */
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { v4 as uuidv4 } from "uuid";
 import { AIRecipeError } from "../middleware/errorHandler.js";
 import { generateRecipeImages } from "./imageGenerationService.js";
+import { executeWithFallback, getModelWithFallback, } from "./modelClient.js";
 // ===== 常數定義 =====
-const MODEL_NAME = "gemini-2.5-flash";
 const AI_DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT) || 3;
 const AI_REQUEST_TIMEOUT = Number(process.env.AI_REQUEST_TIMEOUT) || 30000;
 // 簡易的每日查詢次數追蹤（生產環境應使用 Redis 或資料庫）
 const userQueryCount = new Map();
-// ===== 輔助函式 =====
-function getClient() {
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (!apiKey) {
-        throw new AIRecipeError("AI_005", { reason: "Missing API key" });
-    }
-    return new GoogleGenerativeAI(apiKey);
-}
 function getTodayDate() {
     return new Date().toISOString().split("T")[0];
 }
@@ -116,6 +108,8 @@ function buildSystemPrompt(request) {
 }
 // ===== JSON 解析輔助 =====
 function parseJsonFromText(text) {
+    console.log("[AI Recipe] Raw response length:", text.length);
+    console.log("[AI Recipe] Raw response preview:", text.substring(0, 500));
     // 移除 code fence
     const fence = text.match(/```json\s*([\s\S]*?)\s*```/i);
     const raw = fence ? fence[1] : text;
@@ -124,10 +118,14 @@ function parseJsonFromText(text) {
     const end = raw.lastIndexOf("}");
     const sliced = start !== -1 && end !== -1 && end > start ? raw.slice(start, end + 1) : raw;
     try {
-        return JSON.parse(sliced);
+        const parsed = JSON.parse(sliced);
+        console.log("[AI Recipe] Parsed successfully, recipes count:", parsed.recipes?.length || 0);
+        return parsed;
     }
-    catch {
-        // 解析失敗，回傳預設結構
+    catch (err) {
+        // 解析失敗，輸出詳細錯誤
+        console.error("[AI Recipe] JSON parse error:", err.message);
+        console.error("[AI Recipe] Failed to parse:", sliced.substring(0, 300));
         return {
             greeting: "抱歉，食譜生成時發生錯誤，請稍後再試。",
             recipes: [],
@@ -136,32 +134,33 @@ function parseJsonFromText(text) {
 }
 // ===== 主要 API 函式 =====
 /**
- * 產生多個食譜推薦
+ * 產生多個食譜推薦（支援自動 fallback）
  */
 export async function generateMultipleRecipes(request, userId = "anonymous") {
     // 檢查查詢限制
     const remainingQueries = checkAndUpdateQueryLimit(userId);
-    const genAI = getClient();
-    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
     const systemPrompt = buildSystemPrompt(request);
     const userPrompt = request.prompt;
     // 設置逾時
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT);
     try {
-        const result = await model.generateContent({
-            contents: [
-                {
-                    role: "user",
-                    parts: [{ text: systemPrompt + "\n\n使用者輸入：" + userPrompt }],
+        // 使用 fallback 機制執行 AI 請求
+        const { result, modelUsed, apiKeyIndex } = await executeWithFallback("recipe", async (model) => {
+            return await model.generateContent({
+                contents: [
+                    {
+                        role: "user",
+                        parts: [{ text: systemPrompt + "\n\n使用者輸入：" + userPrompt }],
+                    },
+                ],
+                generationConfig: {
+                    temperature: 0.7,
+                    topK: 40,
+                    topP: 0.95,
+                    maxOutputTokens: 4096,
                 },
-            ],
-            generationConfig: {
-                temperature: 0.7,
-                topK: 40,
-                topP: 0.95,
-                maxOutputTokens: 2048,
-            },
+            });
         });
         clearTimeout(timeoutId);
         const text = result.response.text().trim();
@@ -188,7 +187,8 @@ export async function generateMultipleRecipes(request, userId = "anonymous") {
                 recipes,
                 aiMetadata: {
                     generatedAt: new Date().toISOString(),
-                    model: MODEL_NAME,
+                    model: modelUsed,
+                    apiKeyUsed: apiKeyIndex + 1, // 安全：只顯示 Key 編號，不顯示實際值
                 },
                 remainingQueries,
             },
@@ -196,18 +196,27 @@ export async function generateMultipleRecipes(request, userId = "anonymous") {
     }
     catch (err) {
         clearTimeout(timeoutId);
+        console.error("[AI Recipe] Error occurred:", err.message);
+        console.error("[AI Recipe] Error stack:", err.stack);
         if (err.name === "AbortError") {
             throw new AIRecipeError("AI_006");
+        }
+        // 如果已經是 AIRecipeError，直接重新拋出
+        if (err instanceof AIRecipeError) {
+            throw err;
         }
         throw new AIRecipeError("AI_005", { originalError: err.message });
     }
 }
 /**
  * SSE Streaming 生成食譜
+ * 注意：Streaming 模式使用主模型，不支援自動 fallback
  */
 export async function* streamRecipe(request, userId = "anonymous") {
     const sessionId = uuidv4();
     const remainingQueries = checkAndUpdateQueryLimit(userId);
+    // 取得模型（Streaming 暫不支援自動 fallback）
+    const { model, modelName } = getModelWithFallback("recipe");
     // 發送開始事件
     yield {
         id: `evt-${Date.now()}`,
@@ -215,11 +224,9 @@ export async function* streamRecipe(request, userId = "anonymous") {
         event: "start",
         data: {
             sessionId,
-            model: MODEL_NAME,
+            model: modelName,
         },
     };
-    const genAI = getClient();
-    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
     const systemPrompt = buildSystemPrompt(request);
     const userPrompt = request.prompt;
     try {
@@ -234,7 +241,7 @@ export async function* streamRecipe(request, userId = "anonymous") {
                 temperature: 0.7,
                 topK: 40,
                 topP: 0.95,
-                maxOutputTokens: 2048,
+                maxOutputTokens: 4096,
             },
         });
         let fullText = "";
@@ -283,7 +290,7 @@ export async function* streamRecipe(request, userId = "anonymous") {
                 recipes,
                 aiMetadata: {
                     generatedAt: new Date().toISOString(),
-                    model: MODEL_NAME,
+                    model: modelName,
                 },
                 remainingQueries,
             },
