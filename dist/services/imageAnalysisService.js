@@ -1,28 +1,18 @@
 /**
  * 影像分析服務
  * 負責食材辨識與影像分析功能
- * 使用 gemini-2.5-flash-lite 模型，獨立配額（每日 20 次）
+ * 支援自動 fallback 機制，當主模型達到配額時自動切換
  */
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import fs from "fs";
-// ===== 模型設定 =====
-const MODEL_LEGACY_RECIPE = "gemini-2.5-flash"; // 舊版文字食譜生成（保留相容）
-const MODEL_IMAGE_ANALYSIS = "gemini-2.5-flash-lite"; // 影像辨識使用 lite 版本，獨立配額
-// ===== 輔助函式 =====
-const getClient = () => {
-    const apiKey = process.env.GOOGLE_API_KEY;
-    if (!apiKey) {
-        throw new Error("Missing GOOGLE_API_KEY in environment.");
-    }
-    return new GoogleGenerativeAI(apiKey);
-};
+import { executeWithFallback, getModelWithFallback } from "./modelClient.js";
+// ===== 模型設定（舊版相容用）=====
+const MODEL_LEGACY_RECIPE = "gemini-2.5-flash";
 // ===== 舊版食譜生成（保留相容）=====
 /**
  * @deprecated 請使用 aiRecipeService.ts 的 generateMultipleRecipes()
  */
 export const generateRecipeFromText = async (input) => {
-    const genAI = getClient();
-    const model = genAI.getGenerativeModel({ model: MODEL_LEGACY_RECIPE });
+    const { model } = getModelWithFallback("text");
     const prompt = `
 你是一位專業食譜助手。根據使用者輸入，輸出一段 JSON，符合以下 TypeScript 型別：
 type Recipe = {
@@ -71,9 +61,7 @@ function parseJsonFromText(text) {
  * @returns 食材辨識結果
  */
 export const analyzeImageByUrl = async (imageUrl) => {
-    const genAI = getClient();
-    const model = genAI.getGenerativeModel({ model: MODEL_IMAGE_ANALYSIS });
-    // Fetch the image from the URL
+    // Fetch the image from the URL first
     const response = await fetch(imageUrl);
     if (!response.ok) {
         throw new Error(`Failed to fetch image from URL: ${response.statusText}`);
@@ -100,15 +88,18 @@ export const analyzeImageByUrl = async (imageUrl) => {
 
 請使用繁體中文。今天的日期是 ${new Date().toISOString().split('T')[0]}。
 `;
-    const result = await model.generateContent([
-        { text: prompt },
-        {
-            inlineData: {
-                mimeType: mimeType,
-                data: base64Image,
+    // 使用 fallback 機制執行 AI 請求
+    const { result } = await executeWithFallback("vision", async (model) => {
+        return await model.generateContent([
+            { text: prompt },
+            {
+                inlineData: {
+                    mimeType: mimeType,
+                    data: base64Image,
+                },
             },
-        },
-    ]);
+        ]);
+    });
     const text = result.response.text().trim();
     const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/i);
     const jsonText = jsonMatch ? jsonMatch[1] : text;
@@ -120,8 +111,6 @@ export const analyzeImageByUrl = async (imageUrl) => {
  * @returns 食材辨識結果
  */
 export const analyzeLocalImage = async (filePath) => {
-    const genAI = getClient();
-    const model = genAI.getGenerativeModel({ model: MODEL_IMAGE_ANALYSIS });
     const imageBytes = fs.readFileSync(filePath);
     const prompt = `
 你是一位食材辨識助理。請分析圖片中的食材或食物，並輸出以下 JSON 結構（僅輸出 JSON，不要其他文字）：
@@ -139,17 +128,20 @@ export const analyzeLocalImage = async (filePath) => {
   "notes": string                   // 備註（例如：「新鮮度佳」、「請盡快食用」、「冷藏保存」）
 }
 
-請使用繁體中文。今天的日期是 ${new Date().toISOString().split('T')[0]}。
+請使用繁體中文。今天的日期是 ${new Date().toISOString().split("T")[0]}。
 `;
-    const result = await model.generateContent([
-        { text: prompt },
-        {
-            inlineData: {
-                mimeType: "image/jpeg",
-                data: imageBytes.toString("base64"),
+    // 使用 fallback 機制執行 AI 請求
+    const { result } = await executeWithFallback("vision", async (model) => {
+        return await model.generateContent([
+            { text: prompt },
+            {
+                inlineData: {
+                    mimeType: "image/jpeg",
+                    data: imageBytes.toString("base64"),
+                },
             },
-        },
-    ]);
+        ]);
+    });
     const text = result.response.text().trim();
     const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/i);
     const jsonText = jsonMatch ? jsonMatch[1] : text;
