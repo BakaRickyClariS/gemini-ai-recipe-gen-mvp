@@ -5,7 +5,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import swaggerUi from "swagger-ui-express";
-import { analyzeImageByUrl, analyzeLocalImage, } from "./services/recipeService.js";
+import { analyzeImageByUrl, analyzeLocalImage, } from "./services/imageAnalysisService.js";
 import { generateMultipleRecipes, streamRecipe, AI_SUGGESTION_PROMPTS, } from "./services/aiRecipeService.js";
 import { aiRecipeErrorHandler, validateAIRecipeRequest, } from "./middleware/errorHandler.js";
 import { uploadToCloudinary } from "./services/mediaService.js";

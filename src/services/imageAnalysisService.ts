@@ -1,21 +1,35 @@
+/**
+ * 影像分析服務
+ * 負責食材辨識與影像分析功能
+ * 使用 gemini-2.5-flash-lite 模型，獨立配額（每日 20 次）
+ */
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { Recipe } from "../models/recipe.js";
 import fs from "fs";
 
-const MODEL_TEXT = "gemini-2.5-flash"; // speed/price friendly
-const MODEL_VISION = "gemini-2.5-flash"; // supports image input
+// ===== 模型設定 =====
+const MODEL_LEGACY_RECIPE = "gemini-2.5-flash"; // 舊版文字食譜生成（保留相容）
+const MODEL_IMAGE_ANALYSIS = "gemini-2.5-flash-lite"; // 影像辨識使用 lite 版本，獨立配額
 
-function getClient() {
+// ===== 輔助函式 =====
+
+const getClient = () => {
   const apiKey = process.env.GOOGLE_API_KEY;
   if (!apiKey) {
     throw new Error("Missing GOOGLE_API_KEY in environment.");
   }
   return new GoogleGenerativeAI(apiKey);
-}
+};
 
-export async function generateRecipeFromText(input: string) {
+// ===== 舊版食譜生成（保留相容）=====
+
+/**
+ * @deprecated 請使用 aiRecipeService.ts 的 generateMultipleRecipes()
+ */
+export const generateRecipeFromText = async (input: string) => {
   const genAI = getClient();
-  const model = genAI.getGenerativeModel({ model: MODEL_TEXT });
+  const model = genAI.getGenerativeModel({ model: MODEL_LEGACY_RECIPE });
 
   const prompt = `
 你是一位專業食譜助手。根據使用者輸入，輸出一段 JSON，符合以下 TypeScript 型別：
@@ -52,7 +66,10 @@ type Recipe = {
   return parsed;
 }
 
-type AnalyzeImageResult = {
+// ===== 影像分析型別定義 =====
+
+/** 食材辨識結果 */
+export type IngredientRecognitionResult = {
   // 產品資訊
   productName: string; // 產品名
   category: string; // 分類
@@ -73,6 +90,9 @@ type AnalyzeImageResult = {
   imageUrl?: string | null; // 圖片 URL
 };
 
+/** @deprecated 請使用 IngredientRecognitionResult */
+type AnalyzeImageResult = IngredientRecognitionResult;
+
 function parseJsonFromText(text: string) {
   const fence = text.match(/```json\s*([\s\S]*?)\s*```/i);
   const raw = fence ? fence[1] : text;
@@ -83,11 +103,18 @@ function parseJsonFromText(text: string) {
   return JSON.parse(sliced);
 }
 
-export async function analyzeImageByUrl(
+// ===== 主要影像分析 API =====
+
+/**
+ * 透過 URL 分析圖片中的食材
+ * @param imageUrl 圖片 URL
+ * @returns 食材辨識結果
+ */
+export const analyzeImageByUrl = async (
   imageUrl: string
-): Promise<AnalyzeImageResult> {
+): Promise<IngredientRecognitionResult> => {
   const genAI = getClient();
-  const model = genAI.getGenerativeModel({ model: MODEL_VISION });
+  const model = genAI.getGenerativeModel({ model: MODEL_IMAGE_ANALYSIS });
 
   // Fetch the image from the URL
   const response = await fetch(imageUrl);
@@ -134,12 +161,16 @@ export async function analyzeImageByUrl(
   return parseJsonFromText(jsonText);
 }
 
-// 📸 本地檔案分析
-export async function analyzeLocalImage(
+/**
+ * 分析本地圖片檔案中的食材
+ * @param filePath 本地檔案路徑
+ * @returns 食材辨識結果
+ */
+export const analyzeLocalImage = async (
   filePath: string
-): Promise<AnalyzeImageResult> {
+): Promise<IngredientRecognitionResult> => {
   const genAI = getClient();
-  const model = genAI.getGenerativeModel({ model: MODEL_VISION });
+  const model = genAI.getGenerativeModel({ model: MODEL_IMAGE_ANALYSIS });
 
   const imageBytes = fs.readFileSync(filePath);
 

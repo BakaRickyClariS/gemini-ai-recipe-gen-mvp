@@ -9,7 +9,7 @@ import {
   generateRecipeFromText,
   analyzeImageByUrl,
   analyzeLocalImage,
-} from "./services/recipeService.js";
+} from "./services/imageAnalysisService.js";
 import {
   generateMultipleRecipes,
   streamRecipe,

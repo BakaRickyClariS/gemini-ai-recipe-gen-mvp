@@ -1,4 +1,4 @@
-import { analyzeImageByUrl, analyzeLocalImage } from "./services/recipeService.js";
+import { analyzeImageByUrl, analyzeLocalImage } from "./services/imageAnalysisService.js";
 import "dotenv/config";
 import path from "path";
 
