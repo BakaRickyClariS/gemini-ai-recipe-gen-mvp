@@ -98,6 +98,8 @@ export type AIRecipeResponse = {
     aiMetadata: {
       generatedAt: string;
       model: string;
+      /** 使用的 API Key 編號（安全：不顯示實際 Key 值） */
+      apiKeyUsed?: number;
     };
 
     /** 剩餘查詢次數 */
