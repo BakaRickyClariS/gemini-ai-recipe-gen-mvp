@@ -11,7 +11,8 @@
 | 🖼️ **AI 圖片生成**   | 使用 Gemini 2.0 Flash 自動生成精美食譜圖片      |
 | 📸 **食材辨識**      | 上傳或提供圖片 URL，AI 自動識別食材與建議       |
 | ☁️ **雲端媒體**      | 整合 Cloudinary 進行圖片上傳與管理              |
-| 📄 **Swagger UI**    | 內建互動式 API 文檔                             |
+| 📄 **Swagger UI**    | 內建互動式 API 文檔（支援 CDN 版本適用 Vercel） |
+| 🔄 **自動 Fallback** | 模型與 API Key 自動輪換，最大化每日配額       |
 
 ---
 
@@ -27,10 +28,11 @@ recipe-api/
 │   │   ├── aiRecipe.ts               # AI 食譜請求/回應型別定義
 │   │   └── aiStreamEvents.ts         # SSE 事件型別定義
 │   ├── services/
+│   │   ├── modelClient.ts          # 模型客戶端（自動 Fallback + 多 API Key 支援）
 │   │   ├── aiRecipeService.ts        # AI 多食譜生成與 SSE Streaming
 │   │   ├── imageGenerationService.ts # AI 圖片生成服務 (Gemini 2.0 Flash)
-│   │   ├── mediaService.ts           # Cloudinary 媒體上傳服務
-│   │   └── recipeService.ts          # 文字生成食譜與圖片辨識
+│   │   ├── imageAnalysisService.ts   # 影像分析與食材辨識
+│   │   └── mediaService.ts           # Cloudinary 媒體上傳服務
 │   └── middleware/
 │       └── errorHandler.ts           # 錯誤處理中介層
 ├── docs/                             # API 規格與整合指南
@@ -138,7 +140,8 @@ npm start
 | `GET` | `/`             | API 資訊總覽               |
 | `GET` | `/health`       | 健康檢查                   |
 | `GET` | `/status`       | 服務狀態（uptime、memory） |
-| `GET` | `/docs`         | Swagger UI 互動式文檔      |
+| `GET` | `/docs`         | Swagger UI（本地開發）     |
+| `GET` | `/docs-cdn`     | Swagger UI（CDN 版，適用 Vercel）|
 | `GET` | `/openapi.json` | OpenAPI 規範 JSON          |
 
 ### AI 食譜生成 (v2.0)
@@ -199,7 +202,8 @@ curl -X POST http://localhost:3000/api/v1/ai/recipe \
     ],
     "aiMetadata": {
       "generatedAt": "2025-12-20T05:30:00.000Z",
-      "model": "gemini-2.5-flash"
+      "model": "gemini-2.5-flash",
+      "apiKeyUsed": 1
     },
     "remainingQueries": 2
   }
@@ -326,6 +330,9 @@ curl -X POST http://localhost:3000/api/v1/ai/analyze-image \
 | `CLOUDINARY_UPLOAD_PRESET` | ⚠️   | -           | Cloudinary Upload Preset（無 API Key 時必要） |
 | `AI_DAILY_LIMIT`           | ❌   | 3           | 每用戶每日查詢次數限制                        |
 | `AI_REQUEST_TIMEOUT`       | ❌   | 30000       | AI 請求逾時（毫秒）                           |
+| `GEMINI_API_KEY_1`         | ❌   | -           | 備用 API Key #1（多 Key 支援）             |
+| `GEMINI_API_KEY_2`         | ❌   | -           | 備用 API Key #2                          |
+| `GEMINI_API_KEY_3`         | ❌   | -           | 備用 API Key #3（最多支援 10 個）          |
 | `PORT`                     | ❌   | 3000        | Node.js 監聽端口                              |
 | `NODE_ENV`                 | ❌   | development | 執行環境                                      |
 
@@ -379,10 +386,13 @@ vercel
 
 ### Google Gemini API（免費方案）
 
-- ✅ **永久免費層** - 每分鐘 15 次請求
+- ✅ **永久免費層** - 每模型每日 20 次請求
 - ✅ 支持商業使用
 - ✅ 無需下載模型
 - ✅ 包括文字和圖片輸入
+
+> 💡 **小技巧**：本專案支援多模型 Fallback 與多 API Key 輪換，  
+> 配置 3 個 API Key 可達成 **180+ 次/日** 的免費配額！
 
 **獲取步驟：**
 
