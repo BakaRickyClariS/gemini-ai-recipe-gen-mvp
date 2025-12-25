@@ -1,0 +1,49 @@
+services:
+  api1:
+    image: node:20-slim
+    container_name: recipe-api-api1
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    command: >
+      bash -c "
+        tail -f
+      "
+
+  db:
+    image: postgres:15-alpine
+    container_name: recipe-api-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  pgadmin4:
+      image: dpage/pgadmin4
+      container_name: my_pgadmin4
+      restart: always
+      environment:
+        PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+        PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+        PGADMIN_CONFIG_SESSION_EXPIRATION_TIME: 365
+        PGADMIN_CONFIG_MAX_SESSION_IDLE_TIME: 60
+      volumes:
+        - pgadmin4-data:/var/lib/pgadmin
+      ports:
+        - "5050:80"
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
+
+volumes:
+  postgres_data:
+  pgadmin4-data:
