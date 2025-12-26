@@ -5,6 +5,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import jwt from "jsonwebtoken";
+import { format } from 'date-fns';
 import swaggerUi from "swagger-ui-express";
 import {
     generateRecipeFromText,
@@ -585,6 +586,272 @@ app.delete('/api/v1/group/:groupId/user/:userId', authenticateToken, async (req,
         res.json({
             status: true,
             message: "success"
+        });
+    } catch (err) {
+        res.status(500).send({
+            status: false,
+            message: err.message,
+        });
+    }
+});
+
+app.post('/api/v1/shopping_list', authenticateToken, async (req, res) => {
+    try {
+        await ORM.ShoppingListModel.create({
+            group_id: req.body.group_id,
+            name: req.body.name,
+            start_buy_date: format(new Date(req.body.start_buy_date), 'yyyy-MM-dd 00:00:00'),
+            end_buy_date: format(new Date(req.body.end_buy_date), 'yyyy-MM-dd 23:59:59'),
+            is_notify: req.body.is_notify,
+        });
+
+        res.json({
+            status: true,
+            message: "success"
+        });
+    } catch (err) {
+        res.status(500).send({
+            status: false,
+            message: err.message,
+        });
+    }
+});
+
+app.put('/api/v1/shopping_list/:id', authenticateToken, async (req, res) => {
+    try {
+        await ORM.ShoppingListModel.update(
+            {
+                name: req.body.name,
+                start_buy_date: format(new Date(req.body.start_buy_date), 'yyyy-MM-dd 00:00:00'),
+                end_buy_date: format(new Date(req.body.end_buy_date), 'yyyy-MM-dd 23:59:59'),
+                is_notify: req.body.is_notify,
+            },
+            {
+              where: {
+                id: req.params.id,
+              },
+            },
+          );
+
+        res.json({
+            status: true,
+            message: "success"
+        });
+    } catch (err) {
+        res.status(500).send({
+            status: false,
+            message: err.message,
+        });
+    }
+});
+
+app.delete('/api/v1/shopping_list/:id', authenticateToken, async (req, res) => {
+    try {
+        await ORM.ShoppingListModel.destroy({
+              where: {
+                id: req.params.id,
+              },
+            });
+
+        res.json({
+            status: true,
+            message: "success"
+        });
+    } catch (err) {
+        res.status(500).send({
+            status: false,
+            message: err.message,
+        });
+    }
+});
+
+
+app.get('/api/v1/group/:id/shopping_lists', authenticateToken, async (req, res) => {
+    try {
+        const { status } = req.query; // 接收 status 參數: ongoing, pending, history
+
+        const today = new Date();
+
+        let whereCondition: any = {
+          group_id: req.params.id
+        };
+
+        // 根據 status 參數動態增加時間篩選
+        switch (status) {
+          case 'ongoing': // 1. 進行中
+            whereCondition.start_buy_date = { [ORM.Op.lte]: today };
+            whereCondition.end_buy_date = { [ORM.Op.gt]: today };
+            break;
+          case 'pending': // 2. 待採買
+            whereCondition.start_buy_date = { [ORM.Op.gt]: today };
+            whereCondition.end_buy_date = { [ORM.Op.gt]: today };
+            break;
+          case 'history': // 3. 歷史清單
+            // 注意：這裡假設歷史清單是指結束時間已經過去的清單
+            whereCondition.end_buy_date = { [ORM.Op.lt]: today };
+            break;
+        }
+
+        const shoppLists = await ORM.ShoppingListModel.findAll({
+          where: whereCondition,
+          order: [['start_buy_date', 'DESC']] // 排序：最新的優先
+        });
+
+        res.json({
+            status: true,
+            message: "success",
+            data: shoppLists
+        });
+    } catch (err) {
+        res.status(500).send({
+            status: false,
+            message: err.message,
+        });
+    }
+});
+
+
+app.get('/api/v1/shopping_list/:id', authenticateToken, async (req, res) => {
+    try {
+        const shoppList = await ORM.ShoppingListModel.findByPk(req.params.id);
+
+        res.json({
+            status: true,
+            message: "success",
+            data: shoppList
+        });
+    } catch (err) {
+        res.status(500).send({
+            status: false,
+            message: err.message,
+        });
+    }
+});
+
+app.post('/api/v1/shopping_list/:shoppingListId/item', authenticateToken, async (req, res) => {
+    try {
+        const ShoppingListItem = await ORM.ShoppingListItemModel.create({
+            shopping_list_id: req.params.shoppingListId,
+            user_id: req.user.userId,
+            name: req.body.name,
+            num: req.body.num,
+            unit: req.body.unit
+        });
+
+        res.json({
+            status: true,
+            message: "success"
+        });
+    } catch (err) {
+        res.status(500).send({
+            status: false,
+            message: err.message,
+        });
+    }
+});
+
+app.put('/api/v1/shopping_list/:shoppingListId/item/:shoppingListItemId', authenticateToken, async (req, res) => {
+    try {
+        await ORM.ShoppingListItemModel.update(
+            {
+              shopping_list_id: req.params.shoppingListId,
+              user_id: req.user.userId,
+              name: req.body.name,
+              num: req.body.num,
+              unit: req.body.unit
+            },
+            {
+              where: {
+                id: req.params.shoppingListItemId,
+              },
+            },
+          );
+
+        res.json({
+            status: true,
+            message: "success"
+        });
+    } catch (err) {
+        res.status(500).send({
+            status: false,
+            message: err.message,
+        });
+    }
+});
+
+
+app.delete('/api/v1/shopping_list/:shoppingListId/item/:shoppingListItemId', authenticateToken, async (req, res) => {
+    try {
+        await ORM.ShoppingListItemModel.destroy({
+              where: {
+                id: req.params.shoppingListItemId,
+              },
+            });
+
+        res.json({
+            status: true,
+            message: "success"
+        });
+    } catch (err) {
+        res.status(500).send({
+            status: false,
+            message: err.message,
+        });
+    }
+});
+
+app.get('/api/v1/shopping_list/:shoppingListId/item/:shoppingListItemId', authenticateToken, async (req, res) => {
+    try {
+        const shoppingListitem = await ORM.ShoppingListItemModel.findByPk(req.params.shoppingListItemId);
+
+        res.json({
+            status: true,
+            message: "success",
+            data: shoppingListitem
+        });
+    } catch (err) {
+        res.status(500).send({
+            status: false,
+            message: err.message,
+        });
+    }
+});
+
+app.get('/api/v1/shopping_list/:shoppingListId/items', authenticateToken, async (req, res) => {
+    try {
+        const items = await ORM.ShoppingListItemModel.findAll({
+          where: {
+            shopping_list_id: req.params.shoppingListId
+          },
+          include: [
+            {
+              model: ORM.UserModel,
+              as: 'user', // 確保你的 Model 定義中有設定這個 alias
+              attributes: ['id', 'username', 'avatar'] // 只取需要的欄位
+            }
+          ]
+        });
+
+        // 此時每一筆 item 已經自帶 .user 屬性了
+        const groupedByUsers = items.reduce((acc: any, item: any) => {
+          const userId = item.user_id;
+          if (!acc[userId]) {
+            acc[userId] = {
+              // user_id: userId,
+              user: item.user, // 直接從 item 中取得已經 include 進來的 user
+              items: []
+            };
+          }
+          // 為了讓結構乾淨，可以把 item 裡的 user 刪掉再推入 items 陣列
+          const { user, ...itemData } = item.toJSON();
+          acc[userId].items.push(itemData);
+          return acc;
+        }, {});
+
+        res.json({
+            status: true,
+            message: "success",
+            data: Object.values(groupedByUsers)
         });
     } catch (err) {
         res.status(500).send({

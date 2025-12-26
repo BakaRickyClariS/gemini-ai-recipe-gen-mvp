@@ -64,6 +64,68 @@ const GroupUserModel = sequelize.define('group_users', {
     updatedAt: DataTypes.DATE
 });
 
+const ShoppingListModel = sequelize.define('shopping_lists', {
+    group_id: {
+        type: DataTypes.INTEGER,
+        references: {
+            model: 'groups',
+            key: 'id'
+        }
+    },
+    name: {
+        type: DataTypes.STRING,
+        allowNull: false
+    },
+    start_buy_date: {
+        type: DataTypes.DATE,
+        allowNull: false
+    },
+    end_buy_date: {
+        type: DataTypes.DATE,
+        allowNull: false
+    },
+    is_notify: {
+        type: DataTypes.BOOLEAN,
+    },
+    photo: {
+        type: DataTypes.STRING
+    },
+    createdAt: DataTypes.DATE,
+    updatedAt: DataTypes.DATE
+});
+
+const ShoppingListItemModel = sequelize.define('shopping_list_items', {
+    shopping_list_id: {
+        type: DataTypes.INTEGER,
+        references: {
+            model: 'shopping_lists',
+            key: 'id'
+        }
+    },
+    user_id: {
+        type: DataTypes.INTEGER,
+        references: {
+            model: 'users',
+            key: 'id'
+        }
+    },
+    name: {
+        type: DataTypes.STRING,
+        allowNull: false
+    },
+    num: {
+        type: DataTypes.INTEGER,
+        allowNull: false
+    },
+    unit: {
+        type: DataTypes.STRING
+    },
+    photo: {
+        type: DataTypes.STRING
+    },
+    createdAt: DataTypes.DATE,
+    updatedAt: DataTypes.DATE
+});
 
 // Define association
 GroupModel.belongsTo(UserModel, {
@@ -88,11 +150,15 @@ GroupModel.belongsToMany(UserModel, {
 GroupUserModel.belongsTo(GroupModel, { foreignKey: 'group_id', as: 'group' });
 GroupUserModel.belongsTo(UserModel, { foreignKey: 'user_id', as: 'user' });
 
+ShoppingListItemModel.belongsTo(UserModel, { foreignKey: 'user_id', as: 'user' });
+
 
 export {
     sequelize,
     Op,
     UserModel,
     GroupModel,
-    GroupUserModel
+    GroupUserModel,
+    ShoppingListModel,
+    ShoppingListItemModel
 };

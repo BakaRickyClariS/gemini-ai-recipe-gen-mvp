@@ -9,13 +9,13 @@ export const shorthands = undefined;
  * @returns {Promise<void> | void}
  */
 export const up = (pgm) => {
-	pgm.createTable('group_users', {
+	pgm.createTable('shopping_list_items', {
 	    id: 'id',
-	    group_id: {
+	    shopping_list_id: {
 	      type: 'integer',
 	      notNull: true,
 	      // Creates FK: admin_id REFERENCES users(id)
-	      references: '"groups"',
+	      references: '"shopping_lists"',
 	      onDelete: 'CASCADE', // Optional: Cascade delete
 	    },
 	    user_id: {
@@ -25,6 +25,10 @@ export const up = (pgm) => {
 	      references: '"users"',
 	      onDelete: 'CASCADE', // Optional: Cascade delete
 	    },
+	    name: { type: 'varchar(255)', notNull: true },
+	    num: { type: 'integer', default: 1 },
+	    unit: { type: 'varchar(50)' },
+	    photo: { type: 'varchar(255)' },
 	    createdAt: {
 	      type: 'timestamp',
 	      notNull: true,
@@ -44,5 +48,5 @@ export const up = (pgm) => {
  * @returns {Promise<void> | void}
  */
 export const down = (pgm) => {
-	pgm.dropTable('group_users');
+	pgm.dropTable('shopping_list_items');
 };

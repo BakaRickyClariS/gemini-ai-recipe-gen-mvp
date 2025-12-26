@@ -31,8 +31,6 @@ export const up = (pgm) => {
 	      default: pgm.func('current_timestamp'),
 	    },
 	  });
-
-	pgm.createIndex('users', 'admin_id');
 };
 
 /**
