@@ -9,6 +9,7 @@ import { analyzeImageByUrl, analyzeLocalImage, } from "./services/imageAnalysisS
 import { generateMultipleRecipes, streamRecipe, AI_SUGGESTION_PROMPTS, } from "./services/aiRecipeService.js";
 import { aiRecipeErrorHandler, validateAIRecipeRequest, } from "./middleware/errorHandler.js";
 import { uploadToCloudinary } from "./services/mediaService.js";
+import { analyzeMultipleIngredients } from "./services/multipleIngredientsService.js";
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 // 智能判斷上傳目錄：
@@ -260,6 +261,61 @@ app.post("/api/v1/ai/analyze-image", upload.single("file"), async (req, res) => 
     }
     catch (err) {
         console.error("[Analyze Image Error]", err);
+        return res.status(500).json({
+            success: false,
+            error: err?.message || "Internal server error",
+        });
+    }
+});
+// 3. 多食材影像分析 API (NEW)
+app.post("/api/v1/ai/analyze-image/multiple", upload.single("file"), async (req, res) => {
+    try {
+        let imageUrl = req.body?.imageUrl;
+        const cropImages = req.body?.cropImages !== "false"; // 預設 true
+        const maxIngredients = parseInt(req.body?.maxIngredients) || 10;
+        let imageSource;
+        // 1️⃣ 有上傳檔案（本地模式）
+        if (req.file) {
+            // 使用檔案路徑，讓 service 決定如何讀取
+            imageSource = req.file.path;
+        }
+        // 2️⃣ 若有提供 imageUrl
+        else if (imageUrl) {
+            imageSource = imageUrl;
+        }
+        else {
+            return res.status(400).json({
+                success: false,
+                error: '請提供 imageUrl 或使用 form-data 上傳檔案（欄位名稱為 "file"）',
+            });
+        }
+        console.log(`[Analyze Multiple] Start analyzing: ${req.file ? 'File' : 'URL'}`);
+        const result = await analyzeMultipleIngredients(imageSource, {
+            cropImages,
+            maxIngredients
+        });
+        // 如果是本地檔案，處理完後刪除暫存檔
+        if (req.file) {
+            try {
+                fs.unlinkSync(req.file.path);
+            }
+            catch (e) { /* ignore */ }
+        }
+        return res.json({
+            success: true,
+            data: result,
+            timestamp: new Date().toISOString(),
+        });
+    }
+    catch (err) {
+        console.error("[Analyze Multiple Error]", err);
+        // 如果是本地檔案，出錯也要刪除
+        if (req.file) {
+            try {
+                fs.unlinkSync(req.file.path);
+            }
+            catch (e) { /* ignore */ }
+        }
         return res.status(500).json({
             success: false,
             error: err?.message || "Internal server error",
