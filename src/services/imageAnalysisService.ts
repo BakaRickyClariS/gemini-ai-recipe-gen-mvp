@@ -8,6 +8,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { Recipe } from "../models/recipe.js";
 import fs from "fs";
 import { executeWithFallback, getModelWithFallback } from "./modelClient.js";
+import type { IngredientRecognitionResult } from "../types/imageAnalysis.js";
 
 // ===== 模型設定（舊版相容用）=====
 const MODEL_LEGACY_RECIPE = "gemini-2.5-flash";
@@ -56,28 +57,6 @@ type Recipe = {
 }
 
 // ===== 影像分析型別定義 =====
-
-/** 食材辨識結果 */
-export type IngredientRecognitionResult = {
-  // 產品資訊
-  productName: string; // 產品名
-  category: string; // 分類
-  attributes: string; // 屬性
-  purchaseQuantity: number; // 購物數量
-  unit: string; // 單位
-
-  // 日期設定
-  purchaseDate: string; // 購物日期 (YYYY-MM-DD)
-  expiryDate: string; // 過期日期 (YYYY-MM-DD)
-
-  // 低庫存提醒
-  lowStockAlert: boolean; // 開啟通知（預設 true）
-  lowStockThreshold: number; // 低庫存數量通知（預設 2）
-
-  // 備註
-  notes: string; // 備註
-  imageUrl?: string | null; // 圖片 URL
-};
 
 /** @deprecated 請使用 IngredientRecognitionResult */
 type AnalyzeImageResult = IngredientRecognitionResult;

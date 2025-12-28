@@ -299,6 +299,104 @@
           }
         }
       }
+    },
+    "/api/v1/ai/analyze-image/multiple": {
+      "post": {
+        "summary": "多食材影像分析（新）",
+        "description": "分析單張圖片中的多個食材，回傳食材清單、各食材座標以及裁切後的圖片。\n\n💡 **功能亮點**：\n- 支援一次辨識多個食材（預設最多 10 個）\n- 自動 Server-side 裁切並上傳至 Cloudinary\n- 採用單圖分析+座標回傳策略，大幅節省 Token\n\n📸 **輸入方式**：\n- 推薦：使用 `imageUrl` (JSON)\n- 備用：使用 `file` (Multipart)",
+        "tags": ["AI 圖片分析"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "imageUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "圖片的公開 URL",
+                    "example": "https://example.com/fridge.jpg"
+                  },
+                  "cropImages": {
+                    "type": "boolean",
+                    "description": "是否裁切各食材圖片（預設 true）",
+                    "default": true
+                  },
+                  "maxIngredients": {
+                    "type": "integer",
+                    "description": "最大辨識數量（預設 10）",
+                    "default": 10
+                  }
+                }
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "上傳的圖片檔案"
+                  },
+                  "cropImages": {
+                    "type": "boolean",
+                    "description": "是否裁切各食材圖片（預設 true）",
+                    "default": true
+                  },
+                  "maxIngredients": {
+                    "type": "integer",
+                    "description": "最大辨識數量（預設 10）",
+                    "default": 10
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "多食材分析結果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "originalImageUrl": { "type": "string", "description": "原始圖片 URL" },
+                        "totalCount": { "type": "integer", "description": "辨識到的食材總數" },
+                        "ingredients": {
+                          "type": "array",
+                          "items": {
+                            "allOf": [
+                              { "$ref": "#/components/schemas/IngredientRecognitionResult" },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "boundingBox": { "$ref": "#/components/schemas/BoundingBox" },
+                                  "confidence": { "type": "number", "description": "信心度 (0-1)" }
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "analyzedAt": { "type": "string", "format": "date-time" }
+                      }
+                    },
+                    "timestamp": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "請求無效（缺少圖片）" },
+          "500": { "description": "伺服器錯誤" }
+        }
+      }
     }
   },
   "components": {
@@ -427,6 +525,33 @@
         }
       },
 
+      "BoundingBox": {
+        "type": "object",
+        "description": "邊界框座標 (0-1 相對比例)",
+        "properties": {
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "width": { "type": "number" },
+          "height": { "type": "number" }
+        }
+      },
+      "IngredientRecognitionResult": {
+        "type": "object",
+        "description": "單一食材辨識結果",
+        "properties": {
+          "productName": { "type": "string" },
+          "category": { "type": "string" },
+          "attributes": { "type": "string" },
+          "purchaseQuantity": { "type": "number" },
+          "unit": { "type": "string" },
+          "purchaseDate": { "type": "string", "format": "date" },
+          "expiryDate": { "type": "string", "format": "date" },
+          "lowStockAlert": { "type": "boolean" },
+          "lowStockThreshold": { "type": "number" },
+          "notes": { "type": "string" },
+          "imageUrl": { "type": "string", "nullable": true, "description": "食材圖片 URL (裁切圖或原圖)" }
+        }
+      },
       "ErrorResponse": {
         "type": "object",
         "properties": {
