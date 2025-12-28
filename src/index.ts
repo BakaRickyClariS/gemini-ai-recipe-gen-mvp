@@ -23,6 +23,9 @@ import {
 import type { AIRecipeRequest } from "./types/aiRecipe.js";
 import { uploadToCloudinary } from "./services/mediaService.js";
 import { analyzeMultipleIngredients } from "./services/multipleIngredientsService.js";
+import recipeRoutes from "./routes/recipeRoutes.js";
+import { testConnection } from "./db/index.js";
+
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -93,11 +96,17 @@ const swaggerCdnOptions = {
 };
 app.use("/docs-cdn", swaggerUi.serve, swaggerUi.setup(openapi, swaggerCdnOptions));
 
+// ===== 食譜儲存 API =====
+app.use("/api/v1/recipes", recipeRoutes);
+
+// 測試資料庫連線（背景執行）
+testConnection().catch(console.error);
+
 // Root route - API info
 app.get("/", (_req, res) => {
   res.json({
     name: "Recipe API",
-    version: "2.0.0",
+    version: "2.1.0",
     description: "AI 食譜生成 API - 支援 Gemini AI 多食譜推薦與 SSE Streaming",
     endpoints: {
       health: "/health",
@@ -108,11 +117,13 @@ app.get("/", (_req, res) => {
       streamRecipe: "POST /api/v1/ai/recipe/stream",
       recipeSuggestions: "GET /api/v1/ai/recipe/suggestions",
       analyzeImage: "POST /api/v1/ai/analyze-image",
+      savedRecipes: "GET/POST /api/v1/recipes (食譜儲存)",
     },
     features: {
       multipleRecipes: "支援一次產生多道食譜推薦",
       sseStreaming: "支援 Server-Sent Events 即時串流",
       dailyLimit: "每日查詢次數限制",
+      recipeStorage: "支援儲存 AI 生成的食譜",
     },
   });
 });
