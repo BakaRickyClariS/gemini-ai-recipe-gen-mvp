@@ -29,16 +29,16 @@ export const pool = connectionString
 /**
  * 執行 SQL 查詢
  */
-export const query = async (
+export const query = async <T extends pg.QueryResultRow = pg.QueryResultRow>(
   text: string,
   params?: unknown[]
-): Promise<pg.QueryResult> => {
+): Promise<pg.QueryResult<T>> => {
   if (!pool) {
     throw new Error("資料庫未連線，請設定 DATABASE_URL 環境變數");
   }
 
   const start = Date.now();
-  const result = await pool.query(text, params);
+  const result = await pool.query<T>(text, params);
   const duration = Date.now() - start;
 
   console.log(`[DB] Query executed in ${duration}ms:`, {
