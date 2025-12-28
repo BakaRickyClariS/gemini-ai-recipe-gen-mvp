@@ -10,6 +10,9 @@ import { generateMultipleRecipes, streamRecipe, AI_SUGGESTION_PROMPTS, } from ".
 import { aiRecipeErrorHandler, validateAIRecipeRequest, } from "./middleware/errorHandler.js";
 import { uploadToCloudinary } from "./services/mediaService.js";
 import { analyzeMultipleIngredients } from "./services/multipleIngredientsService.js";
+import recipeRoutes from "./routes/recipeRoutes.js";
+import inventoryRoutes from "./routes/inventoryRoutes.js";
+import { testConnection } from "./db/index.js";
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 // 智能判斷上傳目錄：
@@ -71,11 +74,17 @@ const swaggerCdnOptions = {
     ],
 };
 app.use("/docs-cdn", swaggerUi.serve, swaggerUi.setup(openapi, swaggerCdnOptions));
+// ===== 食譜儲存 API =====
+app.use("/api/v1/recipes", recipeRoutes);
+// ===== 庫存管理 API =====
+app.use("/api/v1/refrigerators/:refrigeratorId/inventory", inventoryRoutes);
+// 測試資料庫連線（背景執行）
+testConnection().catch(console.error);
 // Root route - API info
 app.get("/", (_req, res) => {
     res.json({
         name: "Recipe API",
-        version: "2.0.0",
+        version: "2.2.0",
         description: "AI 食譜生成 API - 支援 Gemini AI 多食譜推薦與 SSE Streaming",
         endpoints: {
             health: "/health",
@@ -86,11 +95,16 @@ app.get("/", (_req, res) => {
             streamRecipe: "POST /api/v1/ai/recipe/stream",
             recipeSuggestions: "GET /api/v1/ai/recipe/suggestions",
             analyzeImage: "POST /api/v1/ai/analyze-image",
+            savedRecipes: "GET/POST /api/v1/recipes (食譜儲存)",
+            inventory: "GET/POST /api/v1/refrigerators/:refrigeratorId/inventory (庫存管理)",
+            inventorySettings: "GET/PUT /api/v1/refrigerators/:refrigeratorId/inventory/settings (庫存設定)",
         },
         features: {
             multipleRecipes: "支援一次產生多道食譜推薦",
             sseStreaming: "支援 Server-Sent Events 即時串流",
             dailyLimit: "每日查詢次數限制",
+            recipeStorage: "支援儲存 AI 生成的食譜",
+            inventoryManagement: "支援庫存食材管理 (CRUD、消耗、統計)",
         },
     });
 });
