@@ -397,6 +397,225 @@
           "500": { "description": "伺服器錯誤" }
         }
       }
+    },
+    "/api/v1/recipes": {
+      "get": {
+        "summary": "取得已儲存的食譜列表",
+        "description": "依使用者 ID 取得已儲存的 AI 生成食譜",
+        "tags": ["食譜儲存"],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "description": "使用者 ID（必填，或使用 X-User-Id Header）",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "description": "使用者 ID",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "每頁筆數（預設 20）",
+            "schema": { "type": "integer", "default": 20 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "分頁偏移量（預設 0）",
+            "schema": { "type": "integer", "default": 0 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "食譜列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "recipes": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/SavedRecipe" }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "total": { "type": "integer" },
+                            "limit": { "type": "integer" },
+                            "offset": { "type": "integer" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "缺少 userId 參數" }
+        }
+      },
+      "post": {
+        "summary": "儲存新食譜",
+        "description": "儲存 AI 生成的食譜到資料庫",
+        "tags": ["食譜儲存"],
+        "parameters": [
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "description": "使用者 ID",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateRecipeInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "食譜建立成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": { "$ref": "#/components/schemas/SavedRecipe" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "缺少必要欄位或 X-User-Id" }
+        }
+      }
+    },
+    "/api/v1/recipes/{id}": {
+      "get": {
+        "summary": "取得單一食譜詳情",
+        "tags": ["食譜儲存"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "食譜 ID (UUID)",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "食譜詳情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": { "$ref": "#/components/schemas/SavedRecipe" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "找不到該食譜" }
+        }
+      },
+      "put": {
+        "summary": "更新食譜",
+        "tags": ["食譜儲存"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "食譜 ID (UUID)",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "description": "使用者 ID（用於權限驗證）",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateRecipeInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": { "$ref": "#/components/schemas/SavedRecipe" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "找不到該食譜或沒有權限" }
+        }
+      },
+      "delete": {
+        "summary": "刪除食譜",
+        "tags": ["食譜儲存"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "食譜 ID (UUID)",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "description": "使用者 ID（用於權限驗證）",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "刪除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "食譜已刪除" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "找不到該食譜或沒有權限" }
+        }
+      }
     }
   },
   "components": {
@@ -565,6 +784,64 @@
             }
           }
         }
+      },
+      "SavedRecipe": {
+        "type": "object",
+        "description": "已儲存的食譜",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "userId": { "type": "string" },
+          "name": { "type": "string", "example": "蒜香奶油蝦義大利麵" },
+          "category": { "type": "string", "example": "義式料理" },
+          "description": { "type": "string", "nullable": true },
+          "imageUrl": { "type": "string", "nullable": true },
+          "servings": { "type": "integer", "example": 2 },
+          "cookTime": { "type": "integer", "description": "烹飪時間（分鐘）", "nullable": true },
+          "difficulty": { "type": "string", "enum": ["簡單", "中等", "困難"], "nullable": true },
+          "ingredients": { "type": "array", "items": { "$ref": "#/components/schemas/IngredientItem" } },
+          "seasonings": { "type": "array", "items": { "$ref": "#/components/schemas/IngredientItem" } },
+          "steps": { "type": "array", "items": { "$ref": "#/components/schemas/CookingStep" } },
+          "source": { "type": "string", "enum": ["ai_generated", "manual"], "example": "ai_generated" },
+          "originalPrompt": { "type": "string", "nullable": true },
+          "isFavorite": { "type": "boolean", "example": false },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateRecipeInput": {
+        "type": "object",
+        "description": "新增食譜的輸入資料",
+        "required": ["name", "ingredients", "steps"],
+        "properties": {
+          "name": { "type": "string", "example": "測試食譜" },
+          "category": { "type": "string" },
+          "description": { "type": "string" },
+          "imageUrl": { "type": "string" },
+          "servings": { "type": "integer", "default": 2 },
+          "cookTime": { "type": "integer" },
+          "difficulty": { "type": "string", "enum": ["簡單", "中等", "困難"] },
+          "ingredients": { "type": "array", "items": { "$ref": "#/components/schemas/IngredientItem" } },
+          "seasonings": { "type": "array", "items": { "$ref": "#/components/schemas/IngredientItem" } },
+          "steps": { "type": "array", "items": { "$ref": "#/components/schemas/CookingStep" } },
+          "originalPrompt": { "type": "string" }
+        }
+      },
+      "UpdateRecipeInput": {
+        "type": "object",
+        "description": "更新食譜的輸入資料（全部選填）",
+        "properties": {
+          "name": { "type": "string" },
+          "category": { "type": "string" },
+          "description": { "type": "string" },
+          "imageUrl": { "type": "string" },
+          "servings": { "type": "integer" },
+          "cookTime": { "type": "integer" },
+          "difficulty": { "type": "string", "enum": ["簡單", "中等", "困難"] },
+          "ingredients": { "type": "array", "items": { "$ref": "#/components/schemas/IngredientItem" } },
+          "seasonings": { "type": "array", "items": { "$ref": "#/components/schemas/IngredientItem" } },
+          "steps": { "type": "array", "items": { "$ref": "#/components/schemas/CookingStep" } },
+          "isFavorite": { "type": "boolean" }
+        }
       }
     }
   },
@@ -572,6 +849,7 @@
     { "name": "系統", "description": "系統健康狀態相關 API" },
     { "name": "AI 食譜", "description": "AI 食譜生成相關 API" },
     { "name": "AI 圖片分析", "description": "圖片分析相關 API" },
+    { "name": "食譜儲存", "description": "AI 生成食譜的儲存管理 API" },
     { "name": "庫存", "description": "庫存食材相關 API" }
   ]
 }
