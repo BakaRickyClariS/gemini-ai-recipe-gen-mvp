@@ -33,30 +33,50 @@
 // Response Interface
 interface GenerateRecipeResponse {
   success: true;
-  data: Recipe;
+  data: GenerateRecipeResult;
   timestamp: string;
+}
+
+interface GenerateRecipeResult {
+  greeting: string;
+  recipes: Recipe[];
+  aiMetadata: {
+    generatedAt: string;
+    model: string;
+  };
+  remainingQueries: number;
 }
 ```
 
-### 前端範例 (Fetch)
+### 3. 前端範例 (Fetch)
 
 ```typescript
-const response = await fetch('http://localhost:3000/api/v1/recipe/generate', {
+const response = await fetch('http://localhost:3000/api/v1/ai/recipe', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ input: '番茄炒蛋' })
+  body: JSON.stringify({ prompt: '有雞肉、洋蔥，想做下飯的菜' })
 });
 const result = await response.json();
-console.log(result.data); // Recipe Object
+console.log(result.data.recipes); // Recipe[]
 ```
 
 ---
 
 ## 2. 圖片分析 (Analyze Image)
 
-分析食材圖片，回傳食材清單與建議料理。支援 **網址 (URL)** 或 **檔案上傳 (File)**。
+(舊版 API，建議使用下方多食材分析 API)
 
-- **Endpoint**: `POST /api/v1/recipe/analyze-image`
+- **Endpoint**: `/api/v1/ai/analyze-image`
+
+... (保留舊版說明供參考) ...
+
+---
+
+## 3. 多食材影像分析 (Analyze Multiple Ingredients) - **[NEW] 推薦使用**
+
+分析單張圖片中的**多個食材**，回傳食材清單、各食材座標以及裁切後的圖片。
+
+- **Endpoint**: `POST /api/v1/ai/analyze-image/multiple`
 
 ### 模式 A：傳送圖片網址 (Image URL)
 
@@ -64,102 +84,111 @@ console.log(result.data); // Recipe Object
 
 ```json
 {
-  "imageUrl": "https://example.com/food.jpg"
+  "imageUrl": "https://example.com/fridge_full.jpg",
+  "cropImages": true,      // (選填) 是否裁切子圖片，預設 true
+  "maxIngredients": 10     // (選填) 最大辨識數量，預設 10
 }
 ```
 
 ### 模式 B：上傳圖片檔案 (File Upload)
 
 - **Content-Type**: `multipart/form-data`
-- **欄位名稱**: `file` (必須是這個名稱)
+- **欄位名稱**: `file`
 
 ### 回應 (Response)
 
 ```ts
-// Response Interface
-interface AnalyzeImageResponse {
-  success: true;
-  data: AnalyzeImageResult;
+interface MultipleIngredientsResponse {
+  success: boolean;
+  data: MultipleIngredientsResult;
   timestamp: string;
 }
 ```
 
-### 前端範例 (File Upload)
+### 🚀 遷移指南：從單一分析切換至多食材分析
+
+為了獲得自動裁切與多食材支援，請參照以下範例修改前端程式碼：
+
+**範例代碼 (Migration Example)**
 
 ```typescript
-const formData = new FormData();
-formData.append('file', fileInput.files[0]); // ⚠️ 欄位名稱必須是 "file"
-
-const response = await fetch('http://localhost:3000/api/v1/recipe/analyze-image', {
+// 呼叫新 API
+const response = await fetch('/api/v1/ai/analyze-image/multiple', {
   method: 'POST',
-  body: formData // ⚠️ 不要手動設定 Content-Type，瀏覽器會自動處理
+  body: formData // 或 JSON body
 });
-
 const result = await response.json();
-console.log(result.data); // AnalyzeImageResult Object
+
+// 1. 取得所有食材 (Inventory 列表用)
+const allIngredients = result.data.ingredients;
+
+// 2. 取得主要食材 (相容舊版單一顯示用)
+// 直接取陣列第一個即為信心度最高的主體
+const mainIngredient = allIngredients[0];
+
+if (mainIngredient) {
+  console.log("產品名稱:", mainIngredient.productName);
+  console.log("裁切圖 URL:", mainIngredient.imageUrl); // 自動裁切後的特寫
+  console.log("原始大圖:", result.data.originalImageUrl);
+}
 ```
 
 ---
 
 ## TypeScript 型別定義 (Type Definitions)
 
-請將以下型別複製到前端專案中 (例如 `src/types/api.ts`) 以獲得完整的型別檢查。
+請將以下型別複製到前端專案中 (例如 `src/types/api.ts`)：
 
 ```typescript
 // 食譜結構
 export type Recipe = {
-  recipeName: string;
-  servings?: number;
-  prepTimeMinutes?: number;
-  cookTimeMinutes?: number;
-  totalTimeMinutes?: number;
-  difficulty?: 'easy' | 'medium' | 'hard';
-  cuisine?: string;
-  category?: string;
-  ingredients: Ingredient[];
-  instructions: Instruction[];
-  tips?: string[];
-  nutritionPerServing?: Nutrition;
-};
-
-export type Ingredient = {
+  id: string;
   name: string;
-  quantity?: number | string;
-  unit?: string;
-  optional?: boolean;
-};
-
-export type Instruction = {
-  step: number;
   description: string;
-  timeMinutes?: number;
+  process: string[]; // 步驟
+  ingredients: string[]; // 食材
+  seasonings: string[]; // 調味料
+  tags: string[];
+  cookingTime: number; // 分鐘
+  servings: number; // 人份
+  difficulty: "簡單" | "中等" | "困難";
+  calories: number;
 };
 
-export type Nutrition = {
-  calories?: number;
-  protein?: string;
-  fat?: string;
-  carbohydrates?: string;
-};
-
-// 圖片分析結果結構（食物庫存管理）
-export type AnalyzeImageResult = {
-  // 產品資訊
+// 基礎食材辨識結果
+export type IngredientRecognitionResult = {
   productName: string;              // 產品名稱
-  category: string;                 // 分類（例如：「乳製品飲料類」、「蔬果類」、「肉蛋類」）
-  attributes: string;               // 屬性（例如：「鮮奶類」、「新鮮類」）
+  category: string;                 // 分類
+  attributes: string;               // 屬性
   purchaseQuantity: number;         // 購物數量
-  unit: string;                     // 單位（例如：「瓶」、「顆」、「盒」、「包」、「公斤」）
-  
-  // 日期設定
-  purchaseDate: string;             // 購物日期（格式：YYYY-MM-DD）
-  expiryDate: string;               // 過期日期（格式：YYYY-MM-DD）
-  
-  // 低庫存提醒
-  lowStockAlert: boolean;           // 開啟通知（預設 true）
-  lowStockThreshold: number;        // 低庫存數量通知（預設 2）
-  
-  // 備註
+  unit: string;                     // 單位
+  purchaseDate: string;             // 購物日期 (YYYY-MM-DD)
+  expiryDate: string;               // 過期日期 (YYYY-MM-DD)
+  lowStockAlert: boolean;           // 開啟通知
+  lowStockThreshold: number;        // 低庫存門檻
   notes: string;                    // 備註
+  imageUrl?: string | null;         // 圖片 URL (裁切圖或原圖)
+};
+
+// 邊界框 (0-1 相對座標)
+export type BoundingBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+// 多食材分析單項
+export type MultipleIngredientItem = IngredientRecognitionResult & {
+  boundingBox: BoundingBox;
+  confidence: number;
+};
+
+// 多食材分析結果概覽
+export type MultipleIngredientsResult = {
+  originalImageUrl: string;
+  totalCount: number;
+  ingredients: MultipleIngredientItem[];
+  analyzedAt: string;
 };
 ```
