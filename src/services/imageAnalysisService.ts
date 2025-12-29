@@ -54,7 +54,7 @@ type Recipe = {
   const jsonText = jsonMatch ? jsonMatch[1] : text;
   const parsed: Recipe = parseJsonFromText(jsonText);
   return parsed;
-}
+};
 
 // ===== 影像分析型別定義 =====
 
@@ -91,15 +91,13 @@ export const analyzeImageByUrl = async (
   const base64Image = buffer.toString("base64");
   const mimeType = response.headers.get("content-type") || "image/jpeg";
 
-
-
   const prompt = `
 你是一位食材辨識助理。請分析圖片中的食材或食物，並輸出以下 JSON 結構（僅輸出 JSON，不要其他文字）：
 
 {
   "productName": string,           // 產品名稱（例如：「鮮奶」、「花椰菜」、「雞蛋」）
   "category": string,               // 分類（例如：「乳製品飲料類」、「蔬果類」、「肉蛋類」）
-  "attributes": string,             // 屬性（例如：「鮮奶類」、「新鮮類」）
+  "attributes": string[],           // 屬性（例如：["鮮奶類"], ["新鮮類"]）
   "purchaseQuantity": number,       // 建議購買數量（根據圖片中的數量估計，預設為 1）
   "unit": string,                   // 單位（例如：「瓶」、「顆」、「盒」、「包」、「公斤」）
   "purchaseDate": string,           // 購買日期（使用今天的日期，格式：YYYY-MM-DD）
@@ -109,7 +107,7 @@ export const analyzeImageByUrl = async (
   "notes": string                   // 備註（例如：「新鮮度佳」、「請盡快食用」、「冷藏保存」）
 }
 
-請使用繁體中文。今天的日期是 ${new Date().toISOString().split('T')[0]}。
+請使用繁體中文。今天的日期是 ${new Date().toISOString().split("T")[0]}。
 `;
 
   // 使用 fallback 機制執行 AI 請求
@@ -147,7 +145,7 @@ export const analyzeLocalImage = async (
 {
   "productName": string,           // 產品名稱（例如：「鮮奶」、「花椰菜」、「雞蛋」）
   "category": string,               // 分類（例如：「乳製品飲料類」、「蔬果類」、「肉蛋類」）
-  "attributes": string,             // 屬性（例如：「鮮奶類」、「新鮮類」）
+  "attributes": string[],           // 屬性（例如：["鮮奶類"], ["新鮮類"]）
   "purchaseQuantity": number,       // 建議購買數量（根據圖片中的數量估計，預設為 1）
   "unit": string,                   // 單位（例如：「瓶」、「顆」、「盒」、「包」、「公斤」）
   "purchaseDate": string,           // 購買日期（使用今天的日期，格式：YYYY-MM-DD）
@@ -178,4 +176,3 @@ export const analyzeLocalImage = async (
   const jsonText = jsonMatch ? jsonMatch[1] : text;
   return parseJsonFromText(jsonText);
 };
-

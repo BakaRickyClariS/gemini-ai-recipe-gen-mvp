@@ -42,7 +42,7 @@
       ingredients: {
         productName: string;       // "蘋果"
         category: string;          // ★ 回傳 ID: "fruit"
-        attributes: string;        // "葉菜根莖類" (產品屬性/副分類，前端需包裝成 array)
+        attributes: string[];      // ["葉菜根莖類"] (產品副分類，直接回傳陣列)
         purchaseQuantity: number;  // 2 (注意：前端需 mapping 為 "quantity")
         unit: string;              // "顆"
         purchaseDate: string;      // "2025-12-29"
@@ -324,4 +324,4 @@ Base Path: `/api/v1/recipes`
 - [ ] **AI 辨識處理**: `POST /api/v1/ai/analyze-image/multiple` 回傳的 `category` 直接使用，無需轉換。
 - [ ] **新增庫存**: 表單送出時 `category` 欄位填入 ID (`fruit`)，非中文。
 - [ ] **欄位 Mapping**: AI 回傳 `purchaseQuantity` → 送到後端時改名為 `quantity`。
-- [ ] **attributes 型別**: AI 回傳 `string`，需轉為 `string[]` 再傳給後端。
+- [ ] **attributes 型別**: AI 直接回傳 `string[]`，可直接傳給後端。
