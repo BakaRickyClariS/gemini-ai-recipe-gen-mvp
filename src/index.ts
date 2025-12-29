@@ -26,9 +26,16 @@ import type { AIRecipeRequest } from "./types/aiRecipe.js";
 import { uploadToCloudinary } from "./services/mediaService.js";
 import authenticateToken from "./middleware/JWTAuthentication";
 import * as ORM from './database/orm';
+import firebaseAdmin from 'firebase-admin';
+import * as serviceAccount from "./service-account-file.json";
+
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+
+firebaseAdmin.initializeApp({
+  credential: firebaseAdmin.credential.cert(serviceAccount)
+});
 
 // 智能判斷上傳目錄：
 // - 優先使用 /tmp（serverless 環境標準：Vercel、AWS Lambda、Google Cloud Functions）
@@ -433,6 +440,11 @@ app.post('/api/v1/user', async (req, res) => {
         // 建立預設群組組員
         await ORM.GroupUserModel.create({
             group_id: createGroup.id,
+            user_id: createUser.id
+        }, { transaction: t });
+
+        // 建立通知設定
+        await ORM.NotificationSettingModel.create({
             user_id: createUser.id
         }, { transaction: t });
 
@@ -860,6 +872,120 @@ app.get('/api/v1/shopping_list/:shoppingListId/items', authenticateToken, async 
         });
     }
 });
+
+
+// --- Notification Settings ---
+app.get('/api/v1/api/v1/notifications/settings', authenticateToken, async (req, res) => {
+    try {
+        const userNotificationSettings = await ORM.NotificationSettingModel.findOne({
+          where: {
+            user_id: req.userId
+          }
+        });
+
+        res.json({
+            status: true,
+            message: "success",
+            data: { "settings": userNotificationSettings }
+        });
+    } catch (err) {
+        res.status(500).send({
+            status: false,
+            message: err.message,
+        });
+    }
+});
+
+
+app.post('/api/v1/api/v1/notifications/push', async (req, res) => {
+    try {
+        // await ORM.NotificationModel.create({
+        //       user_id: req.user.userId,
+        //       category: req.body.category,
+        //       type: req.body.type,
+        //       actionType: req.body.actionType,
+        //       title: req.body.title,
+        //       description: req.body.description,
+        //       pushToken: req.body.pushToken
+        //   });
+
+        const message = {
+          notification: {
+            title: req.body.title,
+            body: req.body.description
+          },
+          token: req.body.pushToken
+        };
+
+        // 送出訊息
+        firebaseAdmin.messaging().send(message)
+          .then((response) => {
+            res.json({
+                status: true,
+                message: "success"
+            });
+          })
+          .catch((error) => {
+            res.status(500).send({
+                status: false,
+                message: "送出失敗",
+            });
+          });
+    } catch (err) {
+        res.status(500).send({
+            status: false,
+            message: err.message,
+        });
+    }
+});
+
+
+app.put('/api/v1/api/v1/notifications/settings', authenticateToken, async (req, res) => {
+    try {
+        const userNotificationSettings = await ORM.NotificationSettingModel.findOne({ where: { user_id: req.user.userId } });
+
+        let result;
+        if (!userNotificationSettings) {
+          await ORM.NotificationSettingModel.create({
+              user_id: req.user.userId,
+              notifyOnExpiry: req.body.notifyOnExpiry,
+              daysBeforeExpiry: req.body.daysBeforeExpiry,
+              notifyOnLowStock: req.body.notifyOnLowStock,
+              enablePush: req.body.enablePush,
+              enableEmail: req.body.enableEmail,
+          });
+        } else {
+          await ORM.NotificationSettingModel.update(
+            {
+                notifyOnExpiry: req.body.notifyOnExpiry,
+                daysBeforeExpiry: req.body.daysBeforeExpiry,
+                notifyOnLowStock: req.body.notifyOnLowStock,
+                enablePush: req.body.enablePush,
+                enableEmail: req.body.enableEmail,
+            },
+            {
+              where: {
+                id: userNotificationSettings.id
+              },
+            },
+          );
+        }
+
+        const updateUserNotificationSettings = await ORM.NotificationSettingModel.findOne({ where: { user_id: req.user.userId } });
+
+        res.json({
+            status: true,
+            message: "success",
+            data: { "settings": updateUserNotificationSettings }
+        });
+    } catch (err) {
+        res.status(500).send({
+            status: false,
+            message: err.message,
+        });
+    }
+});
+
 
 // 錯誤處理中介層
 app.use(aiRecipeErrorHandler);

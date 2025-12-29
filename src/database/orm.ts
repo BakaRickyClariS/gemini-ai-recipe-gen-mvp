@@ -127,6 +127,41 @@ const ShoppingListItemModel = sequelize.define('shopping_list_items', {
     updatedAt: DataTypes.DATE
 });
 
+const NotificationModel = sequelize.define('notifications', {
+    user_id: {
+        type: DataTypes.INTEGER,
+        references: {
+            model: 'users',
+            key: 'id'
+        }
+    },
+    category: DataTypes.STRING,
+    type: DataTypes.STRING,
+    actionType: DataTypes.STRING,
+    title: DataTypes.STRING,
+    description: DataTypes.STRING,
+    isRead: DataTypes.BOOLEAN,
+    createdAt: DataTypes.DATE,
+    updatedAt: DataTypes.DATE
+});
+
+const NotificationSettingModel = sequelize.define('notification_settings', {
+    user_id: {
+        type: DataTypes.INTEGER,
+        references: {
+            model: 'users',
+            key: 'id'
+        }
+    },
+    notifyOnExpiry: DataTypes.BOOLEAN,
+    daysBeforeExpiry: DataTypes.BOOLEAN,
+    notifyOnLowStock: DataTypes.BOOLEAN,
+    enablePush: DataTypes.BOOLEAN,
+    enableEmail: DataTypes.BOOLEAN,
+    createdAt: DataTypes.DATE,
+    updatedAt: DataTypes.DATE
+});
+
 // Define association
 GroupModel.belongsTo(UserModel, {
   foreignKey: 'admin_id',
@@ -151,6 +186,8 @@ GroupUserModel.belongsTo(GroupModel, { foreignKey: 'group_id', as: 'group' });
 GroupUserModel.belongsTo(UserModel, { foreignKey: 'user_id', as: 'user' });
 
 ShoppingListItemModel.belongsTo(UserModel, { foreignKey: 'user_id', as: 'user' });
+NotificationModel.belongsTo(UserModel, { foreignKey: 'user_id', as: 'user' });
+NotificationSettingModel.belongsTo(UserModel, { foreignKey: 'user_id', as: 'user' });
 
 
 export {
@@ -160,5 +197,7 @@ export {
     GroupModel,
     GroupUserModel,
     ShoppingListModel,
-    ShoppingListItemModel
+    ShoppingListItemModel,
+    NotificationModel,
+    NotificationSettingModel
 };
