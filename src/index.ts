@@ -75,6 +75,7 @@ app.use(
       "X-Requested-With",
       "Accept",
       "Origin",
+      "X-User-Id",  // 前端傳遞使用者 ID 用於庫存 API
     ],
   })
 );
