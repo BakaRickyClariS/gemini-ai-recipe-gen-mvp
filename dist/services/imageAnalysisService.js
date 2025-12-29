@@ -76,7 +76,7 @@ export const analyzeImageByUrl = async (imageUrl) => {
 {
   "productName": string,           // 產品名稱（例如：「鮮奶」、「花椰菜」、「雞蛋」）
   "category": string,               // 分類（例如：「乳製品飲料類」、「蔬果類」、「肉蛋類」）
-  "attributes": string,             // 屬性（例如：「鮮奶類」、「新鮮類」）
+  "attributes": string[],           // 屬性（例如：["鮮奶類"], ["新鮮類"]）
   "purchaseQuantity": number,       // 建議購買數量（根據圖片中的數量估計，預設為 1）
   "unit": string,                   // 單位（例如：「瓶」、「顆」、「盒」、「包」、「公斤」）
   "purchaseDate": string,           // 購買日期（使用今天的日期，格式：YYYY-MM-DD）
@@ -86,7 +86,7 @@ export const analyzeImageByUrl = async (imageUrl) => {
   "notes": string                   // 備註（例如：「新鮮度佳」、「請盡快食用」、「冷藏保存」）
 }
 
-請使用繁體中文。今天的日期是 ${new Date().toISOString().split('T')[0]}。
+請使用繁體中文。今天的日期是 ${new Date().toISOString().split("T")[0]}。
 `;
     // 使用 fallback 機制執行 AI 請求
     const { result } = await executeWithFallback("vision", async (model) => {
@@ -118,7 +118,7 @@ export const analyzeLocalImage = async (filePath) => {
 {
   "productName": string,           // 產品名稱（例如：「鮮奶」、「花椰菜」、「雞蛋」）
   "category": string,               // 分類（例如：「乳製品飲料類」、「蔬果類」、「肉蛋類」）
-  "attributes": string,             // 屬性（例如：「鮮奶類」、「新鮮類」）
+  "attributes": string[],           // 屬性（例如：["鮮奶類"], ["新鮮類"]）
   "purchaseQuantity": number,       // 建議購買數量（根據圖片中的數量估計，預設為 1）
   "unit": string,                   // 單位（例如：「瓶」、「顆」、「盒」、「包」、「公斤」）
   "purchaseDate": string,           // 購買日期（使用今天的日期，格式：YYYY-MM-DD）

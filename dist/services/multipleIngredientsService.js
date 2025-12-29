@@ -88,6 +88,10 @@ export const analyzeMultipleIngredients = async (imageSource, options) => {
 ### STEP 3: 輸出格式
 對於每一個辨識到的項目，請提供以下 JSON 資訊：
 1. 產品資訊（名稱、分類、屬性、建議購買/庫存數量、單位）
+   - **屬性 (attributes)**: 請回傳該食材的「副分類」陣列，例如：
+     - fruit: ["葉菜類"], ["根莖類"]
+     - meat: ["牛肉類"], ["加工肉品"]
+     ... (請回傳字串陣列)
 2. 日期設定（購買日期、預估過期日期）
 3. 儲存提醒（是否開啟低庫存提醒、提醒門檻）
 4. **位置資訊**：邊界框座標 (x, y, width, height) 必須為 0-1 的相對比例。
@@ -98,7 +102,7 @@ export const analyzeMultipleIngredients = async (imageSource, options) => {
     {
       "productName": "紅燒牛肉麵",
       "category": "meat",
-      "attributes": "熱食",
+      "attributes": ["牛肉類"],
       "purchaseQuantity": 1,
       "unit": "碗",
       "purchaseDate": "${todayDate}",

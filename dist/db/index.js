@@ -2,8 +2,8 @@
  * PostgreSQL 資料庫連線配置
  * 使用 Supabase PostgreSQL
  */
-import pg from "pg";
-const { Pool } = pg;
+import pkg from "pg";
+const { Pool } = pkg;
 // 從環境變數讀取連線字串
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
