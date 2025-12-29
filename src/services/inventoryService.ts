@@ -353,7 +353,7 @@ export const createInventoryItem = async (
       input.lowStockAlert ?? false,
       input.lowStockThreshold ?? 1,
       input.notes ?? null,
-      input.attributes ?? null,
+      input.attributes ? JSON.stringify(input.attributes) : null,
     ]
   );
   return rowToInventoryItem(result.rows[0]);
@@ -400,7 +400,7 @@ export const updateInventoryItem = async (
 
   if (input.attributes !== undefined) {
     updates.push(`attributes = $${paramIndex}`);
-    values.push(input.attributes);
+    values.push(JSON.stringify(input.attributes));
     paramIndex++;
   }
 

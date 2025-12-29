@@ -249,7 +249,7 @@ export const createInventoryItem = async (userId, refrigeratorId, input) => {
         input.lowStockAlert ?? false,
         input.lowStockThreshold ?? 1,
         input.notes ?? null,
-        input.attributes ?? null,
+        input.attributes ? JSON.stringify(input.attributes) : null,
     ]);
     return rowToInventoryItem(result.rows[0]);
 };
@@ -281,7 +281,7 @@ export const updateInventoryItem = async (id, refrigeratorId, input) => {
     }
     if (input.attributes !== undefined) {
         updates.push(`attributes = $${paramIndex}`);
-        values.push(input.attributes);
+        values.push(JSON.stringify(input.attributes));
         paramIndex++;
     }
     if (updates.length === 0)
