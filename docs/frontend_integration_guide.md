@@ -42,7 +42,7 @@
       ingredients: {
         productName: string;       // "蘋果"
         category: string;          // ★ 回傳 ID: "fruit"
-        attributes: string;        // "冷藏" (注意：AI 回傳 string，前端需包裝成 array)
+        attributes: string;        // "葉菜根莖類" (產品屬性/副分類，前端需包裝成 array)
         purchaseQuantity: number;  // 2 (注意：前端需 mapping 為 "quantity")
         unit: string;              // "顆"
         purchaseDate: string;      // "2025-12-29"
