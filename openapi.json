@@ -397,6 +397,482 @@
           "500": { "description": "伺服器錯誤" }
         }
       }
+    },
+    "/api/v1/recipes": {
+      "get": {
+        "summary": "取得已儲存的食譜列表",
+        "description": "依使用者 ID 取得已儲存的 AI 生成食譜",
+        "tags": ["食譜儲存"],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "description": "使用者 ID（必填，或使用 X-User-Id Header）",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "description": "使用者 ID",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "每頁筆數（預設 20）",
+            "schema": { "type": "integer", "default": 20 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "分頁偏移量（預設 0）",
+            "schema": { "type": "integer", "default": 0 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "食譜列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "recipes": {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/SavedRecipe" }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "total": { "type": "integer" },
+                            "limit": { "type": "integer" },
+                            "offset": { "type": "integer" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "缺少 userId 參數" }
+        }
+      },
+      "post": {
+        "summary": "儲存新食譜",
+        "description": "儲存 AI 生成的食譜到資料庫",
+        "tags": ["食譜儲存"],
+        "parameters": [
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "description": "使用者 ID",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateRecipeInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "食譜建立成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": { "$ref": "#/components/schemas/SavedRecipe" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "缺少必要欄位或 X-User-Id" }
+        }
+      }
+    },
+    "/api/v1/recipes/{id}": {
+      "get": {
+        "summary": "取得單一食譜詳情",
+        "tags": ["食譜儲存"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "食譜 ID (UUID)",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "食譜詳情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": { "$ref": "#/components/schemas/SavedRecipe" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "找不到該食譜" }
+        }
+      },
+      "put": {
+        "summary": "更新食譜",
+        "tags": ["食譜儲存"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "食譜 ID (UUID)",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "description": "使用者 ID（用於權限驗證）",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateRecipeInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": { "$ref": "#/components/schemas/SavedRecipe" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "找不到該食譜或沒有權限" }
+        }
+      },
+      "delete": {
+        "summary": "刪除食譜",
+        "tags": ["食譜儲存"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "食譜 ID (UUID)",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "description": "使用者 ID（用於權限驗證）",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "刪除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "食譜已刪除" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "找不到該食譜或沒有權限" }
+        }
+      }
+    },
+    "/api/v1/refrigerators/{refrigeratorId}/inventory": {
+      "get": {
+        "summary": "取得庫存列表",
+        "description": "依使用者和冰箱 ID 取得庫存食材列表",
+        "tags": ["庫存管理"],
+        "parameters": [
+          {
+            "name": "refrigeratorId",
+            "in": "path",
+            "required": true,
+            "description": "冰箱/群組 ID",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "description": "使用者 ID",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "description": "依類別篩選",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "依狀態篩選",
+            "schema": { "type": "string", "enum": ["expired", "expiring-soon", "low-stock"] }
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "description": "包含額外資料 (summary,stats)",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 50 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "庫存列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": { "type": "array", "items": { "$ref": "#/components/schemas/InventoryItem" } },
+                        "total": { "type": "integer" },
+                        "stats": { "$ref": "#/components/schemas/InventoryStats" },
+                        "summary": { "$ref": "#/components/schemas/InventorySummary" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "新增庫存食材",
+        "tags": ["庫存管理"],
+        "parameters": [
+          { "name": "refrigeratorId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateInventoryInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "建立成功" }
+        }
+      }
+    },
+    "/api/v1/refrigerators/{refrigeratorId}/inventory/{id}": {
+      "get": {
+        "summary": "取得單筆食材",
+        "tags": ["庫存管理"],
+        "parameters": [
+          { "name": "refrigeratorId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "食材詳情" },
+          "404": { "description": "找不到該食材" }
+        }
+      },
+      "put": {
+        "summary": "更新食材",
+        "tags": ["庫存管理"],
+        "parameters": [
+          { "name": "refrigeratorId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateInventoryInput" } } }
+        },
+        "responses": {
+          "200": { "description": "更新成功" },
+          "404": { "description": "找不到該食材" }
+        }
+      },
+      "delete": {
+        "summary": "刪除食材",
+        "tags": ["庫存管理"],
+        "parameters": [
+          { "name": "refrigeratorId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": { "description": "刪除成功" },
+          "404": { "description": "找不到該食材" }
+        }
+      }
+    },
+    "/api/v1/refrigerators/{refrigeratorId}/inventory/{id}/consume": {
+      "post": {
+        "summary": "消耗食材",
+        "tags": ["庫存管理"],
+        "parameters": [
+          { "name": "refrigeratorId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ConsumeInventoryInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "消耗成功" },
+          "400": { "description": "數量超過庫存" },
+          "404": { "description": "找不到該食材" }
+        }
+      }
+    },
+    "/api/v1/refrigerators/{refrigeratorId}/inventory/settings": {
+      "get": {
+        "summary": "取得庫存設定",
+        "tags": ["庫存設定"],
+        "parameters": [
+          { "name": "refrigeratorId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "設定資料",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "settings": { "$ref": "#/components/schemas/InventorySettings" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "更新庫存設定",
+        "tags": ["庫存設定"],
+        "parameters": [
+          { "name": "refrigeratorId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateInventorySettingsInput" } } }
+        },
+        "responses": { "200": { "description": "更新成功" } }
+      },
+      "patch": {
+        "summary": "部分更新庫存設定",
+        "tags": ["庫存設定"],
+        "parameters": [
+          { "name": "refrigeratorId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateInventorySettingsInput" } } }
+        },
+        "responses": { "200": { "description": "更新成功" } }
+      }
+    },
+    "/api/v1/refrigerators/{refrigeratorId}/inventory/summary": {
+      "get": {
+        "summary": "取得庫存摘要",
+        "tags": ["庫存管理"],
+        "parameters": [
+          { "name": "refrigeratorId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "摘要資料",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "summary": { "$ref": "#/components/schemas/InventorySummary" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/refrigerators/{refrigeratorId}/inventory/categories": {
+      "get": {
+        "summary": "取得分類列表",
+        "tags": ["庫存管理"],
+        "parameters": [
+          { "name": "refrigeratorId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "分類列表" }
+        }
+      }
     }
   },
   "components": {
@@ -565,6 +1041,178 @@
             }
           }
         }
+      },
+      "SavedRecipe": {
+        "type": "object",
+        "description": "已儲存的食譜",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "userId": { "type": "string" },
+          "name": { "type": "string", "example": "蒜香奶油蝦義大利麵" },
+          "category": { "type": "string", "example": "義式料理" },
+          "description": { "type": "string", "nullable": true },
+          "imageUrl": { "type": "string", "nullable": true },
+          "servings": { "type": "integer", "example": 2 },
+          "cookTime": { "type": "integer", "description": "烹飪時間（分鐘）", "nullable": true },
+          "difficulty": { "type": "string", "enum": ["簡單", "中等", "困難"], "nullable": true },
+          "ingredients": { "type": "array", "items": { "$ref": "#/components/schemas/IngredientItem" } },
+          "seasonings": { "type": "array", "items": { "$ref": "#/components/schemas/IngredientItem" } },
+          "steps": { "type": "array", "items": { "$ref": "#/components/schemas/CookingStep" } },
+          "source": { "type": "string", "enum": ["ai_generated", "manual"], "example": "ai_generated" },
+          "originalPrompt": { "type": "string", "nullable": true },
+          "isFavorite": { "type": "boolean", "example": false },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateRecipeInput": {
+        "type": "object",
+        "description": "新增食譜的輸入資料",
+        "required": ["name", "ingredients", "steps"],
+        "properties": {
+          "name": { "type": "string", "example": "測試食譜" },
+          "category": { "type": "string" },
+          "description": { "type": "string" },
+          "imageUrl": { "type": "string" },
+          "servings": { "type": "integer", "default": 2 },
+          "cookTime": { "type": "integer" },
+          "difficulty": { "type": "string", "enum": ["簡單", "中等", "困難"] },
+          "ingredients": { "type": "array", "items": { "$ref": "#/components/schemas/IngredientItem" } },
+          "seasonings": { "type": "array", "items": { "$ref": "#/components/schemas/IngredientItem" } },
+          "steps": { "type": "array", "items": { "$ref": "#/components/schemas/CookingStep" } },
+          "originalPrompt": { "type": "string" }
+        }
+      },
+      "UpdateRecipeInput": {
+        "type": "object",
+        "description": "更新食譜的輸入資料（全部選填）",
+        "properties": {
+          "name": { "type": "string" },
+          "category": { "type": "string" },
+          "description": { "type": "string" },
+          "imageUrl": { "type": "string" },
+          "servings": { "type": "integer" },
+          "cookTime": { "type": "integer" },
+          "difficulty": { "type": "string", "enum": ["簡單", "中等", "困難"] },
+          "ingredients": { "type": "array", "items": { "$ref": "#/components/schemas/IngredientItem" } },
+          "seasonings": { "type": "array", "items": { "$ref": "#/components/schemas/IngredientItem" } },
+          "steps": { "type": "array", "items": { "$ref": "#/components/schemas/CookingStep" } },
+          "isFavorite": { "type": "boolean" }
+        }
+      },
+      "InventoryItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "userId": { "type": "string" },
+          "refrigeratorId": { "type": "string" },
+          "name": { "type": "string" },
+          "category": { "type": "string" },
+          "quantity": { "type": "number" },
+          "unit": { "type": "string" },
+          "imageUrl": { "type": "string" },
+          "purchaseDate": { "type": "string", "format": "date" },
+          "expiryDate": { "type": "string", "format": "date" },
+          "lowStockAlert": { "type": "boolean" },
+          "lowStockThreshold": { "type": "number" },
+          "notes": { "type": "string" },
+          "attributes": { "type": "array", "items": { "type": "string" } },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateInventoryInput": {
+        "type": "object",
+        "required": ["name", "quantity"],
+        "properties": {
+          "name": { "type": "string" },
+          "category": { "type": "string" },
+          "quantity": { "type": "number" },
+          "unit": { "type": "string" },
+          "imageUrl": { "type": "string" },
+          "purchaseDate": { "type": "string", "format": "date" },
+          "expiryDate": { "type": "string", "format": "date" },
+          "lowStockAlert": { "type": "boolean" },
+          "lowStockThreshold": { "type": "number" },
+          "notes": { "type": "string" },
+          "attributes": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "UpdateInventoryInput": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "category": { "type": "string" },
+          "quantity": { "type": "number" },
+          "unit": { "type": "string" },
+          "imageUrl": { "type": "string" },
+          "purchaseDate": { "type": "string", "format": "date" },
+          "expiryDate": { "type": "string", "format": "date" },
+          "lowStockAlert": { "type": "boolean" },
+          "lowStockThreshold": { "type": "number" },
+          "notes": { "type": "string" }
+        }
+      },
+      "ConsumeInventoryInput": {
+        "type": "object",
+        "required": ["quantity", "reasons"],
+        "properties": {
+          "quantity": { "type": "number" },
+          "reasons": { "type": "array", "items": { "type": "string", "enum": ["recipe_consumption", "duplicate", "short_shelf", "bought_too_much", "custom"] } },
+          "customReason": { "type": "string" }
+        }
+      },
+      "InventoryStats": {
+        "type": "object",
+        "properties": {
+          "totalItems": { "type": "integer" },
+          "expiredCount": { "type": "integer" },
+          "expiringSoonCount": { "type": "integer" },
+          "lowStockCount": { "type": "integer" },
+          "byCategory": { "type": "object", "additionalProperties": { "type": "integer" } }
+        }
+      },
+      "InventorySummary": {
+        "type": "object",
+        "properties": {
+          "total": { "type": "integer" },
+          "expiring": { "type": "integer" },
+          "expired": { "type": "integer" },
+          "lowStock": { "type": "integer" }
+        }
+      },
+      "InventorySettings": {
+        "type": "object",
+        "properties": {
+          "layoutType": { "type": "string", "enum": ["layout-a", "layout-b", "layout-c"] },
+          "categoryOrder": { "type": "array", "items": { "type": "string" } },
+          "categories": { "type": "array", "items": { "$ref": "#/components/schemas/CategorySettingItem" } },
+          "lowStockThreshold": { "type": "integer" },
+          "expiringSoonDays": { "type": "integer" },
+          "notifyOnExpiry": { "type": "boolean" },
+          "notifyOnLowStock": { "type": "boolean" }
+        }
+      },
+      "CategorySettingItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "isVisible": { "type": "boolean" },
+          "subCategories": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "UpdateInventorySettingsInput": {
+        "type": "object",
+        "properties": {
+          "layoutType": { "type": "string", "enum": ["layout-a", "layout-b", "layout-c"] },
+          "categoryOrder": { "type": "array", "items": { "type": "string" } },
+          "categories": { "type": "array", "items": { "$ref": "#/components/schemas/CategorySettingItem" } },
+          "lowStockThreshold": { "type": "integer" },
+          "expiringSoonDays": { "type": "integer" },
+          "notifyOnExpiry": { "type": "boolean" },
+          "notifyOnLowStock": { "type": "boolean" }
+        }
       }
     }
   },
@@ -572,6 +1220,8 @@
     { "name": "系統", "description": "系統健康狀態相關 API" },
     { "name": "AI 食譜", "description": "AI 食譜生成相關 API" },
     { "name": "AI 圖片分析", "description": "圖片分析相關 API" },
-    { "name": "庫存", "description": "庫存食材相關 API" }
+    { "name": "食譜儲存", "description": "AI 生成食譜的儲存管理 API" },
+    { "name": "庫存管理", "description": "庫存食材 CRUD 與消耗 API" },
+    { "name": "庫存設定", "description": "庫存版型和類別設定 API" }
   ]
 }
