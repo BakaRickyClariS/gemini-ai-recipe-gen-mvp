@@ -14,6 +14,16 @@ const DEFAULT_CATEGORIES = [
     { id: 'meat', title: '肉品類', isVisible: true, subCategories: ['豬肉類', '牛肉類', '雞肉類', '加工肉品'] },
     { id: 'others', title: '乾貨醬料類', isVisible: true, subCategories: ['調味醬', '果醬', '乾燥食材', '油品', '醃製品'] },
 ];
+// ===== 預設類別資訊（供 categories API 使用）=====
+const DEFAULT_CATEGORY_INFO = [
+    { id: 'fruit', title: '蔬果類', count: 0, imageUrl: '/images/categories/fruit.png', bgColor: '#E8F5E9', slogan: '新鮮蔬果', description: ['葉菜類', '根莖類', '瓜果類', '新鮮菇類', '水果'] },
+    { id: 'frozen', title: '冷凍調理類', count: 0, imageUrl: '/images/categories/frozen.png', bgColor: '#E3F2FD', slogan: '冷凍食品', description: ['冷凍調理包', '加熱即食餐', '冷凍甜點'] },
+    { id: 'bake', title: '主食烘焙類', count: 0, imageUrl: '/images/categories/bake.png', bgColor: '#FFF3E0', slogan: '麵包主食', description: ['米飯', '麵條', '麵包', '堅果', '乾貨'] },
+    { id: 'milk', title: '乳品飲料類', count: 0, imageUrl: '/images/categories/milk.png', bgColor: '#FFFDE7', slogan: '乳製品', description: ['蛋類', '鮮奶', '優格', '奶油', '起司', '果汁', '茶飲'] },
+    { id: 'seafood', title: '冷凍海鮮類', count: 0, imageUrl: '/images/categories/seafood.png', bgColor: '#E0F7FA', slogan: '新鮮海產', description: ['魚肉', '甲殼類', '貝類', '魚漿製品'] },
+    { id: 'meat', title: '肉品類', count: 0, imageUrl: '/images/categories/meat.png', bgColor: '#FFEBEE', slogan: '優質肉品', description: ['豬肉類', '牛肉類', '雞肉類', '加工肉品'] },
+    { id: 'others', title: '乾貨醬料類', count: 0, imageUrl: '/images/categories/others.png', bgColor: '#F5F5F5', slogan: '其他食材', description: ['調味醬', '果醬', '乾燥食材', '油品', '醃製品'] },
+];
 // ===== Row 轉換 =====
 const rowToInventoryItem = (row) => ({
     id: row.id,
@@ -251,15 +261,21 @@ export const getInventorySummary = async (userId, refrigeratorId) => {
 };
 /**
  * 取得分類列表
+ * 如果沒有任何食材，回傳預設類別列表（count 為 0）
  */
 export const getInventoryCategories = async (userId, refrigeratorId) => {
     const result = await query(`SELECT category, COUNT(*) as count FROM inventory 
      WHERE user_id = $1 AND refrigerator_id = $2 
      GROUP BY category`, [userId, refrigeratorId]);
-    return result.rows.map(row => ({
-        id: row.category,
-        title: row.category,
-        count: parseInt(row.count, 10),
+    // 如果沒有任何食材，回傳預設類別（count 為 0）
+    if (result.rows.length === 0) {
+        return DEFAULT_CATEGORY_INFO;
+    }
+    // 有食材時，合併預設類別資訊與實際統計
+    const countMap = new Map(result.rows.map(row => [row.category, parseInt(row.count, 10)]));
+    return DEFAULT_CATEGORY_INFO.map(cat => ({
+        ...cat,
+        count: countMap.get(cat.id) || 0,
     }));
 };
 // ===== 庫存設定 API =====

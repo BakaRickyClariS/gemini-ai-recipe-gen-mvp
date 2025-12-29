@@ -85,6 +85,8 @@ export type CategoryInfo = {
   count: number;
   imageUrl?: string;
   bgColor?: string;
+  slogan?: string;
+  description?: string[];
 };
 
 // ===== 類別設定項目 =====
