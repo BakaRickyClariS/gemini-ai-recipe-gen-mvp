@@ -2,31 +2,31 @@
  * 庫存管理相關型別定義
  */
 
-// ===== 食材分類 =====
-export type FoodCategory = 
-  | '蔬菜類'
-  | '調味料類'
-  | '主食類'
-  | '乳製品飲料'
-  | '水果'
-  | '肉類海鮮'
-  | '其他';
+// ===== 食材分類 (Strict IDs) =====
+export type FoodCategory =
+  | "fruit"
+  | "frozen"
+  | "bake"
+  | "milk"
+  | "seafood"
+  | "meat"
+  | "others";
 
 // ===== 庫存狀態 =====
-export type InventoryStatus = 
-  | 'normal'
-  | 'low-stock'
-  | 'expired'
-  | 'expiring-soon'
-  | 'frequent';
+export type InventoryStatus =
+  | "normal"
+  | "low-stock"
+  | "expired"
+  | "expiring-soon"
+  | "frequent";
 
 // ===== 消耗原因 =====
-export type ConsumptionReason = 
-  | 'recipe_consumption'
-  | 'duplicate'
-  | 'short_shelf'
-  | 'bought_too_much'
-  | 'custom';
+export type ConsumptionReason =
+  | "recipe_consumption"
+  | "duplicate"
+  | "short_shelf"
+  | "bought_too_much"
+  | "custom";
 
 // ===== 庫存食材 =====
 export type InventoryItem = {
@@ -49,7 +49,10 @@ export type InventoryItem = {
 };
 
 // ===== 新增食材請求 =====
-export type CreateInventoryInput = Omit<InventoryItem, 'id' | 'userId' | 'refrigeratorId' | 'createdAt' | 'updatedAt'>;
+export type CreateInventoryInput = Omit<
+  InventoryItem,
+  "id" | "userId" | "refrigeratorId" | "createdAt" | "updatedAt"
+>;
 
 // ===== 更新食材請求 =====
 export type UpdateInventoryInput = Partial<CreateInventoryInput>;
@@ -102,7 +105,7 @@ export type InventorySettings = {
   id?: string;
   userId: string;
   refrigeratorId?: string;
-  layoutType: 'layout-a' | 'layout-b' | 'layout-c';
+  layoutType: "layout-a" | "layout-b" | "layout-c";
   categoryOrder: string[];
   categories?: CategorySettingItem[];
   lowStockThreshold: number;
@@ -114,7 +117,9 @@ export type InventorySettings = {
 };
 
 // ===== 更新設定請求 =====
-export type UpdateInventorySettingsInput = Partial<Omit<InventorySettings, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>;
+export type UpdateInventorySettingsInput = Partial<
+  Omit<InventorySettings, "id" | "userId" | "createdAt" | "updatedAt">
+>;
 
 // ===== 分頁參數 =====
 export type InventoryPaginationParams = {
