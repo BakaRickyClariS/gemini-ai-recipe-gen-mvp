@@ -13,10 +13,7 @@ import type {
 import type { AIStreamEvent } from "../types/aiStreamEvents.js";
 import { AIRecipeError } from "../middleware/errorHandler.js";
 import { generateRecipeImages } from "./imageGenerationService.js";
-import {
-  executeWithFallback,
-  getModelWithFallback,
-} from "./modelClient.js";
+import { executeWithFallback, getModelWithFallback } from "./modelClient.js";
 
 // ===== 常數定義 =====
 const AI_DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT) || 3;
@@ -79,8 +76,11 @@ function buildSystemPrompt(request: AIRecipeRequest): string {
    - difficulty：難易度（簡單、中等、困難）
    - imageUrl：留空字串，系統會自動生成
    - isFavorite：false
-   - ingredients：準備材料陣列，每項包含 name（名稱）、amount（數量，如 "3-4"）、unit（單位，如 "條"）
-   - seasonings：調味料陣列，格式同 ingredients
+   - ingredients：**核心食材陣列 (Trackable)**
+     * 這裡只列出「需要庫存管理」的主要食材 (蔬果, 肉類, 海鮮, 主食, 蛋奶, 冷凍食品)。
+     * 請忽略水、油、基礎調味料、蔥花蒜末等「調味耗材」。
+   - seasonings：**調味與耗材陣列 (Ignore)**
+     * 這裡列出所有的調味料 (鹽, 糖, 醬油, 油)、水、以及微量辛香料 (蔥/蒜/辣椒)。
    - steps：烹煮步驟陣列，每項包含 step（步驟編號）、description（詳細說明）
 
 輸出需符合以下 JSON 結構（僅輸出 JSON，不要加其他文字）：
@@ -97,10 +97,14 @@ function buildSystemPrompt(request: AIRecipeRequest): string {
       "imageUrl": "",
       "isFavorite": false,
       "ingredients": [
-        { "name": "食材名稱", "amount": "數量", "unit": "單位" }
+        { "name": "牛肉塊", "amount": "300", "unit": "g" },
+        { "name": "青江菜", "amount": "2", "unit": "把" },
+        { "name": "拉麵條", "amount": "2", "unit": "球" }
       ],
       "seasonings": [
-        { "name": "調味料名稱", "amount": "數量", "unit": "單位" }
+        { "name": "醬油", "amount": "2", "unit": "大匙" },
+        { "name": "水", "amount": "1000", "unit": "ml" },
+        { "name": "蔥花", "amount": "少許", "unit": "適量" }
       ],
       "steps": [
         { "step": 1, "description": "步驟說明" }
@@ -194,22 +198,25 @@ export async function generateMultipleRecipes(
 
   try {
     // 使用 fallback 機制執行 AI 請求
-    const { result, modelUsed, apiKeyIndex } = await executeWithFallback("recipe", async (model) => {
-      return await model.generateContent({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: systemPrompt + "\n\n使用者輸入：" + userPrompt }],
+    const { result, modelUsed, apiKeyIndex } = await executeWithFallback(
+      "recipe",
+      async (model) => {
+        return await model.generateContent({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: systemPrompt + "\n\n使用者輸入：" + userPrompt }],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 4096,
           },
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 4096,
-        },
-      });
-    });
+        });
+      }
+    );
 
     clearTimeout(timeoutId);
 
