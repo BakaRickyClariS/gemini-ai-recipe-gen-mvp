@@ -3,8 +3,9 @@
  * 使用 Supabase PostgreSQL
  */
 
-import pg from "pg";
-const { Pool } = pg;
+import pkg from "pg";
+const { Pool } = pkg;
+import type { QueryResult, QueryResultRow } from "pg";
 
 // 從環境變數讀取連線字串
 const connectionString = process.env.DATABASE_URL;
@@ -29,10 +30,10 @@ export const pool = connectionString
 /**
  * 執行 SQL 查詢
  */
-export const query = async <T extends pg.QueryResultRow = pg.QueryResultRow>(
+export const query = async <T extends QueryResultRow = QueryResultRow>(
   text: string,
   params?: unknown[]
-): Promise<pg.QueryResult<T>> => {
+): Promise<QueryResult<T>> => {
   if (!pool) {
     throw new Error("資料庫未連線，請設定 DATABASE_URL 環境變數");
   }
