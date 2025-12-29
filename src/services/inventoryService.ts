@@ -136,7 +136,8 @@ export const getInventoryItems = async (
     paramIndex++;
   }
 
-  // Reading file firstatus) {
+  // 狀態篩選
+  if (status) {
     const today = new Date().toISOString().split('T')[0];
     const threeDaysLater = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
@@ -236,7 +237,7 @@ export const createInventoryItem = async (
       input.lowStockAlert ?? false,
       input.lowStockThreshold ?? 1,
       input.notes ?? null,
-      input.attributes ? JSON.stringify(input.attributes) : null,
+      input.attributes ?? null,
     ]
   );
   return rowToInventoryItem(result.rows[0]);
@@ -251,7 +252,7 @@ export const updateInventoryItem = async (
   input: UpdateInventoryInput
 ): Promise<InventoryItem | null> => {
   const updates: string[] = [];
-  const values: (string | number | boolean | null)[] = [];
+  const values: (string | number | boolean | null | string[])[] = [];
   let paramIndex = 1;
 
   const fieldMap: Record<string, string> = {
@@ -277,7 +278,7 @@ export const updateInventoryItem = async (
 
   if (input.attributes !== undefined) {
     updates.push(`attributes = $${paramIndex}`);
-    values.push(JSON.stringify(input.attributes));
+    values.push(input.attributes);
     paramIndex++;
   }
 

@@ -1,6 +1,5 @@
 import "dotenv/config";
 import { pool } from "../db/index.js";
-
 const MIGRATION_SQL = `
 -- 1. Create categories table
 CREATE TABLE IF NOT EXISTS categories (
@@ -52,33 +51,30 @@ FOREIGN KEY (category)
 REFERENCES categories(id)
 ON UPDATE CASCADE;
 `;
-
 async function runMigration() {
-  if (!pool) {
-    console.error("❌ Database connection failed. Please check DATABASE_URL.");
-    process.exit(1);
-  }
-
-  const client = await pool.connect();
-  try {
-    console.log("🚀 Starting Category Normalization...");
-    await client.query("BEGIN");
-
-    await client.query(MIGRATION_SQL);
-
-    await client.query("COMMIT");
-    console.log("✅ Migration completed successfully!");
-    console.log('   - Created table "categories"');
-    console.log("   - Seeded 7 strict categories");
-    console.log('   - Migrated existing "inventory" data');
-    console.log("   - Enforced Foreign Key constraint");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    console.error("❌ Migration failed:", error);
-  } finally {
-    client.release();
-    await pool.end();
-  }
+    if (!pool) {
+        console.error("❌ Database connection failed. Please check DATABASE_URL.");
+        process.exit(1);
+    }
+    const client = await pool.connect();
+    try {
+        console.log("🚀 Starting Category Normalization...");
+        await client.query("BEGIN");
+        await client.query(MIGRATION_SQL);
+        await client.query("COMMIT");
+        console.log("✅ Migration completed successfully!");
+        console.log('   - Created table "categories"');
+        console.log("   - Seeded 7 strict categories");
+        console.log('   - Migrated existing "inventory" data');
+        console.log("   - Enforced Foreign Key constraint");
+    }
+    catch (error) {
+        await client.query("ROLLBACK");
+        console.error("❌ Migration failed:", error);
+    }
+    finally {
+        client.release();
+        await pool.end();
+    }
 }
-
 runMigration();
