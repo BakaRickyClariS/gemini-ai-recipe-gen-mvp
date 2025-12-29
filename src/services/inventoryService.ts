@@ -136,8 +136,7 @@ export const getInventoryItems = async (
     paramIndex++;
   }
 
-  // 狀態篩選
-  if (status) {
+  // Reading file firstatus) {
     const today = new Date().toISOString().split('T')[0];
     const threeDaysLater = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
@@ -165,7 +164,12 @@ export const getInventoryItems = async (
   );
   const total = parseInt(countResult.rows[0]?.count ?? '0', 10);
 
-  // 取得列表
+  // 取得列表 (JOIN categories 取得中文標題)
+  // 注意：我們保持 rowToInventoryItem 介面，但 category 欄位現在是英文 ID。
+  // 若前端需要中文標題，可以在 rowToInventoryItem 或這裡擴充。
+  // 目前 InventoryItem type 的 category 是 string (ID)。前端負責顯示 Mapping。
+  // 但為了方便 debug，我們這裡還是只單純撈 inventory 即可，因為 category ID 已經夠明確。
+  // 使用者要求"正規化"，主要目的是"資料庫結構"。API 回傳 "fruit" 是正確的。
   const listResult = await query<InventoryRow>(
     `SELECT * FROM inventory ${whereClause} ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
     [...values, limit, offset]
@@ -405,30 +409,48 @@ export const getInventorySummary = async (
 
 /**
  * 取得分類列表
- * 如果沒有任何食材，回傳預設類別列表（count 為 0）
+ * 從真正的 categories 表取得分類，並 Left Join 庫存數量
  */
 export const getInventoryCategories = async (
   userId: string,
   refrigeratorId: string
 ): Promise<CategoryInfo[]> => {
-  const result = await query<{ category: string; count: string }>(
-    `SELECT category, COUNT(*) as count FROM inventory 
-     WHERE user_id = $1 AND refrigerator_id = $2 
-     GROUP BY category`,
+  // 1. 取得所有 categories (metadata)
+  // 2. 取得該 User 對應的 inventory count
+  // 3. 結合回傳
+  const result = await query<{ 
+    id: string; 
+    title: string; 
+    icon: string; 
+    bg_color: string; 
+    count: string 
+  }>(
+    `SELECT 
+       c.id, 
+       c.title, 
+       c.icon as "imageUrl", 
+       c.bg_color as "bgColor",
+       COALESCE(i.count, 0) as count
+     FROM categories c
+     LEFT JOIN (
+       SELECT category, COUNT(*) as count 
+       FROM inventory 
+       WHERE user_id = $1 AND refrigerator_id = $2 
+       GROUP BY category
+     ) i ON c.id = i.category
+     ORDER BY c.sort_order ASC`,
     [userId, refrigeratorId]
   );
 
-  // 如果沒有任何食材，回傳預設類別（count 為 0）
-  if (result.rows.length === 0) {
-    return DEFAULT_CATEGORY_INFO;
-  }
-
-  // 有食材時，合併預設類別資訊與實際統計
-  const countMap = new Map(result.rows.map(row => [row.category, parseInt(row.count, 10)]));
-  
-  return DEFAULT_CATEGORY_INFO.map(cat => ({
-    ...cat,
-    count: countMap.get(cat.id) || 0,
+  return result.rows.map(row => ({
+    id: row.id,
+    title: row.title,
+    count: parseInt(row.count, 10),
+    imageUrl: row.icon,
+    bgColor: row.bg_color,
+    // 以下欄位目前資料庫沒存，暫時給預設或空值，等待未來擴充 DB
+    slogan: '', 
+    description: [] 
   }));
 };
 
