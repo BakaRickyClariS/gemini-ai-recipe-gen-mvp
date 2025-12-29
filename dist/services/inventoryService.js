@@ -265,6 +265,7 @@ export const getInventoryCategories = async (userId, refrigeratorId) => {
 // ===== 庫存設定 API =====
 /**
  * 取得庫存設定
+ * 如果資料庫沒有記錄，會自動建立預設設定
  */
 export const getInventorySettings = async (userId, refrigeratorId) => {
     const result = await query(`SELECT * FROM inventory_settings 
@@ -272,18 +273,23 @@ export const getInventorySettings = async (userId, refrigeratorId) => {
     if (result.rows[0]) {
         return rowToSettings(result.rows[0]);
     }
-    // 回傳預設設定
-    return {
+    // 自動建立預設設定並回傳（包含 id）
+    const insertResult = await query(`INSERT INTO inventory_settings (
+      user_id, refrigerator_id, layout_type, category_order, categories,
+      low_stock_threshold, expiring_soon_days, notify_on_expiry, notify_on_low_stock
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING *`, [
         userId,
-        refrigeratorId,
-        layoutType: 'layout-a',
-        categoryOrder: DEFAULT_CATEGORY_ORDER,
-        categories: DEFAULT_CATEGORIES,
-        lowStockThreshold: 2,
-        expiringSoonDays: 3,
-        notifyOnExpiry: true,
-        notifyOnLowStock: true,
-    };
+        refrigeratorId ?? null,
+        'layout-a',
+        JSON.stringify(DEFAULT_CATEGORY_ORDER),
+        JSON.stringify(DEFAULT_CATEGORIES),
+        2, // lowStockThreshold
+        3, // expiringSoonDays
+        true, // notifyOnExpiry
+        true, // notifyOnLowStock
+    ]);
+    return rowToSettings(insertResult.rows[0]);
 };
 /**
  * 更新庫存設定 (upsert)
