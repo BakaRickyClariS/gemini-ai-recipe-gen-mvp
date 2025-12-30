@@ -163,18 +163,18 @@ function parseJsonFromText(text: string): {
   const end = raw.lastIndexOf("}");
   const sliced =
     start !== -1 && end !== -1 && end > start ? raw.slice(start, end + 1) : raw;
-
+  console.log("[AI Recipe] Sliced content for parsing:", sliced);
+ 
   try {
     const parsed = JSON.parse(sliced);
-    // console.log(
-    //   "[AI Recipe] Parsed successfully, recipes count:",
-    //   parsed.recipes?.length || 0
-    // );
+    console.log("[AI Recipe] JSON parsed successfully. Recipes count:", parsed.recipes?.length || 0);
     return parsed;
   } catch (err: any) {
-    // 解析失敗，輸出詳細錯誤
+    // 解析失敗，輸出詳細錯誤以利除錯
     console.error("[AI Recipe] JSON parse error:", err.message);
-    console.error("[AI Recipe] Failed to parse:", sliced.substring(0, 300));
+    console.error("[AI Recipe] Failed to parse content (first 1000 chars):", sliced.substring(0, 1000));
+    console.error("[AI Recipe] Full raw response for debugging:", text); // 輸出全文以利定位問題
+    
     return {
       greeting: "抱歉，食譜生成時發生錯誤，請稍後再試。",
       recipes: [],
@@ -210,10 +210,10 @@ export async function generateMultipleRecipes(
 
   try {
     // 使用 fallback 機制執行 AI 請求
-    const { result, modelUsed, apiKeyIndex } = await executeWithFallback(
+    const { result: parsedData, modelUsed, apiKeyIndex } = await executeWithFallback(
       "recipe",
       async (model) => {
-        return await model.generateContent({
+        const result = await model.generateContent({
           contents: [
             {
               role: "user",
@@ -227,18 +227,28 @@ export async function generateMultipleRecipes(
             maxOutputTokens: 4096,
           },
         });
+
+        const text = result.response.text().trim();
+        const parsed = parseJsonFromText(text);
+
+        // 如果解析結果為空（包含了錯誤訊息），則拋出錯誤以觸發重試
+        if (parsed.recipes.length === 0) {
+           throw new Error("AI generation incomplete or malformed JSON");
+        }
+
+        return parsed;
       }
     );
 
     clearTimeout(timeoutId);
 
-    const text = result.response.text().trim();
-    const parsed = parseJsonFromText(text);
+    // const text = result.response.text().trim(); // Moved inside
+    // const parsed = parseJsonFromText(text);     // Moved inside
 
-    // 確保每個 recipe 都有 id
-    let recipes = parsed.recipes.map((recipe) => ({
+    // 確保每個 recipe 都有全域唯一的 valid UUID (配合資料庫型別)
+    let recipes = parsedData.recipes.map((recipe) => ({
       ...recipe,
-      id: recipe.id || generateRecipeId(),
+      id: uuidv4(), // 不再加 "ai-" 前綴，因為 DB 是 uuid 型別
       imageUrl: recipe.imageUrl || null,
       isFavorite: recipe.isFavorite ?? false,
     }));
@@ -254,7 +264,7 @@ export async function generateMultipleRecipes(
       status: true,
       message: "ok",
       data: {
-        greeting: parsed.greeting,
+        greeting: parsedData.greeting,
         recipes,
         aiMetadata: {
           generatedAt: new Date().toISOString(),
@@ -376,12 +386,32 @@ export async function* streamRecipe(
 
     // 解析完成的結果
     const parsed = parseJsonFromText(fullText);
-    const recipes = parsed.recipes.map((recipe) => ({
+ 
+    // 發送進度事件 - 開始生圖
+    yield {
+      id: `evt-${Date.now()}-img-start`,
+      timestamp: new Date().toISOString(),
+      event: "progress",
+      data: {
+        percent: 95,
+        stage: "正在為您生成食譜圖片...",
+      },
+    };
+ 
+    // 1. 強制賦予唯一的 ID (UUID)
+    // 2. 進行生圖
+    let recipes = parsed.recipes.map((recipe) => ({
       ...recipe,
-      id: recipe.id || generateRecipeId(),
+      id: uuidv4(),
       imageUrl: recipe.imageUrl || null,
       isFavorite: recipe.isFavorite ?? false,
     }));
+ 
+    try {
+      recipes = await generateRecipeImages(recipes);
+    } catch (imgErr) {
+      console.warn("[AI Recipe] Stream image generation failed");
+    }
 
     // 發送完成事件
     yield {

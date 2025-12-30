@@ -14,12 +14,29 @@ export type ModelPurpose = "recipe" | "vision" | "text";
 
 /** 模型優先順序配置 */
 export const MODEL_PRIORITY: Record<ModelPurpose, string[]> = {
-  // 食譜生成：主力 → 新版 → 輕量版
-  recipe: ["gemini-2.5-flash", "gemini-3-flash", "gemini-2.5-flash-lite"],
-  // 影像分析：輕量版 → 主力 → 新版
-  vision: ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-3-flash"],
-  // 文字生成：主力 → 新版
-  text: ["gemini-2.5-flash", "gemini-3-flash"],
+  // 食譜生成：主力 (User Pref) → Stable
+  recipe: [
+    "gemini-2.5-flash", 
+    "gemini-3-flash", 
+    "gemini-2.5-flash-lite",
+    "gemini-1.5-flash", 
+    "gemini-1.5-pro"
+  ],
+  // 影像分析：主力 (User Pref) → Stable
+  vision: [
+    "gemini-2.5-flash-lite", 
+    "gemini-2.5-flash", 
+    "gemini-3-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro"
+  ],
+  // 文字生成：主力 (User Pref) → Stable
+  text: [
+    "gemini-2.5-flash", 
+    "gemini-3-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro"
+  ],
 };
 
 // ===== API Key 管理 =====
@@ -129,18 +146,17 @@ export const executeWithFallback = async <T>(
         return { result, modelUsed: modelName, apiKeyIndex: keyIndex };
       } catch (error) {
         lastError = error as Error;
+
         console.warn(
           `[ModelClient] ❌ 失敗: API Key #${keyIndex + 1} | 模型: ${modelName} | 錯誤: ${lastError.message}`
         );
 
-        // 如果是配額錯誤，嘗試下一個模型/Key
-        if (isQuotaError(error)) {
-          console.log(`[ModelClient] ⚠️ 配額已滿，嘗試下一個備用方案...`);
-          continue;
-        }
-
-        // 其他錯誤直接拋出
-        throw error;
+        const isFatal = lastError.message.includes("400") && 
+                       !lastError.message.includes("Bad Request") && 
+                       !lastError.message.includes("Invalid Argument"); 
+        
+        console.log(`[ModelClient] ⚠️ 發生錯誤，嘗試下一個備用方案...`);
+        continue;
       }
     }
 
