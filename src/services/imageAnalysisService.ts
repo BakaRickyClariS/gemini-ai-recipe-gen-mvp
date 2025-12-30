@@ -9,6 +9,7 @@ import type { Recipe } from "../models/recipe.js";
 import fs from "fs";
 import { executeWithFallback, getModelWithFallback } from "./modelClient.js";
 import type { IngredientRecognitionResult } from "../types/imageAnalysis.js";
+import { validateImageInput } from "../middleware/aiSecurity.js";
 
 // ===== 模型設定（舊版相容用）=====
 const MODEL_LEGACY_RECIPE = "gemini-2.5-flash";
@@ -81,6 +82,12 @@ function parseJsonFromText(text: string) {
 export const analyzeImageByUrl = async (
   imageUrl: string
 ): Promise<IngredientRecognitionResult> => {
+  // 1. 安全驗證
+  const validation = validateImageInput({ url: imageUrl });
+  if (!validation.isValid) {
+    throw new Error(`Security validation failed: ${validation.error}`);
+  }
+
   // Fetch the image from the URL first
   const response = await fetch(imageUrl);
   if (!response.ok) {
@@ -137,6 +144,15 @@ export const analyzeImageByUrl = async (
 export const analyzeLocalImage = async (
   filePath: string
 ): Promise<IngredientRecognitionResult> => {
+  // 1. 安全驗證 (簡單檢查檔案大小與類型)
+  // 注意：這裡假設 filePath 是系統內部路徑，風險較低，但仍可做基本檢查
+  const stats = fs.statSync(filePath);
+  const validation = validateImageInput({ sizeBytes: stats.size });
+  
+  if (!validation.isValid) {
+     throw new Error(`Security validation failed: ${validation.error}`);
+  }
+
   const imageBytes = fs.readFileSync(filePath);
 
   const prompt = `
