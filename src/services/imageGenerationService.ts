@@ -135,6 +135,44 @@ b.風格-->食物攝影形象照、${category}風格、深色木紋背景、${ra
   return null;
 };
 
+// ===== Unsplash 最終備用方案 (搜尋真實照片) =====
+
+/**
+ * 從 Unsplash 搜尋高品質食物照片
+ * 即使生成 API 都掛掉，也能保證有精美的圖片顯示
+ */
+const getUnsplashImage = async (recipeName: string, category: string): Promise<string | null> => {
+  try {
+    const accessKey = process.env.UNSPLASH_ACCESS_KEY;
+    const categoryEn = getCategoryInEnglish(category);
+    
+    // 組合更具體的搜尋詞：料理類型 (英文) + 食譜名稱
+    // 雖然食譜名稱是中文，但 Unsplash 的標籤系統有時能識別中文關鍵字
+    const searchQuery = `${categoryEn} food ${recipeName}`;
+    
+    if (accessKey) {
+      const response = await fetch(
+        `https://api.unsplash.com/photos/random?query=${encodeURIComponent(
+          searchQuery
+        )}&orientation=squarish&client_id=${accessKey}`
+      );
+      if (response.ok) {
+        const data = (await response.json()) as any;
+        return data.urls?.regular || null;
+      }
+    }
+    
+    // 如果沒有 Key 或 API 失敗，使用 Source Redirect 作為最後手段
+    const randomSig = Math.floor(Math.random() * 1000000);
+    // 這裡我們將中文名稱也傳進去，增加精準度
+    const searchTerm = `${categoryEn},food,${recipeName}`;
+    return `https://source.unsplash.com/featured/800x800?${encodeURIComponent(searchTerm)}&sig=${randomSig}`;
+  } catch (err) {
+    console.warn("[ImageGen] Unsplash lookup failed");
+    return null;
+  }
+};
+
 // ===== 主要圖片生成函式（含備用方案）=====
 
 /**
@@ -165,12 +203,29 @@ export const generateRecipeImage = async (
     
     // 將 Pollinations 圖片上傳到 Cloudinary 以獲得永久網址
     const uploadResult = await uploadToCloudinary(pollinationsUrl);
+    
+    // 檢查是否又是那個 "Rate Limit" 的圖片 (Pollinations 額度滿了會回傳特定圖片)
+    // 雖然難以從 URL 判斷，但如果真的遇到了，我們可以靠 Unsplash 救場
     console.log(`[ImageGen] Uploaded Pollinations image to Cloudinary: ${uploadResult.secure_url}`);
     return { url: uploadResult.secure_url };
   } catch (err: any) {
-    console.error("[ImageGen] Pollinations or Cloudinary upload failed:", err.message);
-    return null;
+    console.warn(`[ImageGen] Pollinations or Cloudinary upload failed: ${err.message}`);
   }
+
+  // 第三備用方案：Unsplash (搜尋真實照片)
+  try {
+    console.log(`[ImageGen] Using Unsplash fallback for: ${recipeName}`);
+    const unsplashUrl = await getUnsplashImage(recipeName, category);
+    if (unsplashUrl) {
+      // 同樣上傳到 Cloudinary 確保網址一致性
+      const uploadResult = await uploadToCloudinary(unsplashUrl);
+      return { url: uploadResult.secure_url };
+    }
+  } catch (unsplashErr: any) {
+    console.error("[ImageGen] All fallbacks failed:", unsplashErr.message);
+  }
+
+  return null;
 };
 
 /**
