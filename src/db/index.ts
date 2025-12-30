@@ -42,6 +42,7 @@ export const query = async <T extends QueryResultRow = QueryResultRow>(
   const result = await pool.query<T>(text, params);
   const duration = Date.now() - start;
 
+  console.log(`[DB] Query: ${text} | Params: ${JSON.stringify(params)}`);
   console.log(`[DB] Query executed in ${duration}ms:`, {
     rowCount: result.rowCount,
   });

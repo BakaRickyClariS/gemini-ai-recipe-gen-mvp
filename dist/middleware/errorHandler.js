@@ -10,6 +10,7 @@ export const AIErrorCodes = {
     AI_004: { status: 401, message: "未授權（需登入）" },
     AI_005: { status: 500, message: "AI 服務暫時無法使用" },
     AI_006: { status: 504, message: "AI 生成逾時" },
+    AI_007: { status: 400, message: "輸入內容包含不允許的指令或關鍵字" },
 };
 // ===== 自訂錯誤類別 =====
 export class AIRecipeError extends Error {
@@ -49,7 +50,7 @@ export function aiRecipeErrorHandler(err, _req, res, _next) {
     });
 }
 // ===== 驗證中介層 =====
-const PROMPT_MAX_LENGTH = 1000;
+const PROMPT_MAX_LENGTH = 4000;
 /**
  * Express 中介層：驗證 AI 食譜請求
  */

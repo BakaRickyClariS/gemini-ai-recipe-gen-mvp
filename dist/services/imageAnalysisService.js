@@ -5,6 +5,7 @@
  */
 import fs from "fs";
 import { executeWithFallback, getModelWithFallback } from "./modelClient.js";
+import { validateImageInput } from "../middleware/aiSecurity.js";
 // ===== 模型設定（舊版相容用）=====
 const MODEL_LEGACY_RECIPE = "gemini-2.5-flash";
 // ===== 舊版食譜生成（保留相容）=====
@@ -61,6 +62,11 @@ function parseJsonFromText(text) {
  * @returns 食材辨識結果
  */
 export const analyzeImageByUrl = async (imageUrl) => {
+    // 1. 安全驗證
+    const validation = validateImageInput({ url: imageUrl });
+    if (!validation.isValid) {
+        throw new Error(`Security validation failed: ${validation.error}`);
+    }
     // Fetch the image from the URL first
     const response = await fetch(imageUrl);
     if (!response.ok) {
@@ -111,6 +117,13 @@ export const analyzeImageByUrl = async (imageUrl) => {
  * @returns 食材辨識結果
  */
 export const analyzeLocalImage = async (filePath) => {
+    // 1. 安全驗證 (簡單檢查檔案大小與類型)
+    // 注意：這裡假設 filePath 是系統內部路徑，風險較低，但仍可做基本檢查
+    const stats = fs.statSync(filePath);
+    const validation = validateImageInput({ sizeBytes: stats.size });
+    if (!validation.isValid) {
+        throw new Error(`Security validation failed: ${validation.error}`);
+    }
     const imageBytes = fs.readFileSync(filePath);
     const prompt = `
 你是一位食材辨識助理。請分析圖片中的食材或食物，並輸出以下 JSON 結構（僅輸出 JSON，不要其他文字）：
