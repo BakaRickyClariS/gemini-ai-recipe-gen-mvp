@@ -66,7 +66,7 @@ export type RecipeListItem = {
   id: string;
   name: string;
   category: string;
-  imageUrl: string;
+  imageUrl: string | null;
   servings: number;
   cookTime: number;
   isFavorite: boolean;
