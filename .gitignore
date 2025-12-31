@@ -15,3 +15,6 @@ pnpm-debug.log*
 .idea/
 .DS_Store
 .env.example
+
+# Firebase Service Account (敏感金鑰，勿提交)
+service-account-file.json
