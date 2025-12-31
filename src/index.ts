@@ -101,8 +101,15 @@ app.use("/docs-cdn", swaggerUi.serve, swaggerUi.setup(openapi, swaggerCdnOptions
 // ===== 食譜儲存 API =====
 app.use("/api/v1/recipes", recipeRoutes);
 
+import notificationRoutes from "./routes/notificationRoutes.js";
+
+// ... (existing code)
+
 // ===== 庫存管理 API =====
 app.use("/api/v1/refrigerators/:refrigeratorId/inventory", inventoryRoutes);
+
+// ===== 推播通知 API =====
+app.use("/api/v1/notifications", notificationRoutes);
 
 // 測試資料庫連線（背景執行）
 testConnection().catch(console.error);
@@ -111,7 +118,7 @@ testConnection().catch(console.error);
 app.get("/", (_req, res) => {
   res.json({
     name: "Recipe API",
-    version: "2.2.0",
+    version: "2.3.0", // Minor version bump
     description: "AI 食譜生成 API - 支援 Gemini AI 多食譜推薦與 SSE Streaming",
     endpoints: {
       health: "/health",
@@ -125,6 +132,7 @@ app.get("/", (_req, res) => {
       savedRecipes: "GET/POST /api/v1/recipes (食譜儲存)",
       inventory: "GET/POST /api/v1/refrigerators/:refrigeratorId/inventory (庫存管理)",
       inventorySettings: "GET/PUT /api/v1/refrigerators/:refrigeratorId/inventory/settings (庫存設定)",
+      notifications: "POST /api/v1/notifications/token (推播註冊)",
     },
     features: {
       multipleRecipes: "支援一次產生多道食譜推薦",
@@ -132,6 +140,7 @@ app.get("/", (_req, res) => {
       dailyLimit: "每日查詢次數限制",
       recipeStorage: "支援儲存 AI 生成的食譜",
       inventoryManagement: "支援庫存食材管理 (CRUD、消耗、統計)",
+      pushNotifications: "支援 FCM 推播與通知中心",
     },
   });
 });
