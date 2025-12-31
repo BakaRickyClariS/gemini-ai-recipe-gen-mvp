@@ -70,31 +70,42 @@ function buildSystemPrompt(request: AIRecipeRequest): string {
    - 正確範例："您好！很高興為您推薦這幾道料理..."
    - 錯誤範例：{"greeting": "..."} 或 \`\`\`json ... \`\`\`
 2. 根據使用者需求推薦 ${recipeCount} 道食譜
-3. 每道食譜需包含完整資訊：
-   - id：使用 "ai-001" 格式
-   - name：食譜名稱
-   - category：料理類型（如：中式、日式、西式、台式、泰式等）
-   - servings：${servings} 人份
-   - cookTime：烹飪時間（分鐘）
-   - difficulty：難易度（簡單、中等、困難）
-   - imageUrl：留空字串，系統會自動生成
-   - isFavorite：false
-   - ingredients：**核心食材陣列 (Trackable)**
+3. 每道食譜需包含完整資訊，**所有欄位皆為必填，不可為空字串、null、undefined 或省略**：
+   - id：【必填】使用 "ai-001" 格式
+   - name：【必填】食譜名稱，若無法生成請填「未命名食譜」
+   - category：【必填】料理類型（如：中式、日式、西式、台式、泰式等），若無法判斷請填「家常菜」
+   - servings：【必填】${servings} 人份
+   - cookTime：【必填】烹飪時間（分鐘），若無法判斷請填 30
+   - difficulty：【必填】難易度（簡單、中等、困難），若無法判斷請填「中等」
+   - imageUrl：【必填】留空字串或 null，系統會自動生成
+   - isFavorite：【必填】false
+   - ingredients：【必填】**核心食材陣列 (Trackable)**，至少要有一項食材
      * **必須優先使用使用者指定的庫存食材**（若有提供）。
      * 這裡只列出「需要庫存管理」的主要食材 (蔬果, 肉類, 海鮮, 主食, 蛋奶, 冷凍食品)。
      * 請忽略水、油、基礎調味料、蔥花蒜末等「調味耗材」。
-   - seasonings：**調味與耗材陣列 (Ignore)**
+     * 每項食材必須包含：name（名稱）、amount（數量）、unit（單位）
+   - seasonings：【必填】**調味與耗材陣列 (Ignore)**，至少要有一項調味料
      * 這裡列出所有的調味料 (鹽, 糖, 醬油, 油)、水、以及微量辛香料 (蔥/蒜/辣椒)。
-   - steps：烹煮步驟陣列，每項包含 step（步驟編號）、description（詳細說明）
+     * 每項調味料必須包含：name（名稱）、amount（數量）、unit（單位）
+   - steps：【必填】烹煮步驟陣列，至少要有一個步驟
+     * 每項包含 step（步驟編號，必須為數字）、description（詳細說明，不可為空）
 
 輸出需符合以下 JSON 結構（僅輸出 JSON，不要加其他文字）：
+
+【重要規則】
+1. 所有欄位都是必填，絕對不能為空字串（除了 imageUrl）、null、undefined 或省略任何欄位
+2. ingredients 陣列至少要有 1 項食材
+3. seasonings 陣列至少要有 1 項調味料
+4. steps 陣列至少要有 1 個步驟
+5. 每個步驟的 description 都必須有實質內容
+
 {
-  "greeting": "回應訊息",
+  "greeting": "回應訊息（純文字，必填）",
   "recipes": [
     {
       "id": "ai-001",
-      "name": "食譜名稱",
-      "category": "料理類型",
+      "name": "食譜名稱（必填）",
+      "category": "料理類型（必填）",
       "servings": ${servings},
       "cookTime": 30,
       "difficulty": "簡單",
@@ -111,7 +122,7 @@ function buildSystemPrompt(request: AIRecipeRequest): string {
         { "name": "蔥花", "amount": "少許", "unit": "適量" }
       ],
       "steps": [
-        { "step": 1, "description": "步驟說明" }
+        { "step": 1, "description": "步驟說明（必填，不可為空）" }
       ]
     }
   ]

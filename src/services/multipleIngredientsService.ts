@@ -104,15 +104,41 @@ export const analyzeMultipleIngredients = async (
 - **others**: 乾貨醬料類 (特殊醬料/油品, 醃製品)
 
 ### STEP 3: 輸出格式
-對於每一個辨識到的項目，請提供以下 JSON 資訊：
-1. 產品資訊（名稱、分類、屬性、建議購買/庫存數量、單位）
-   - **屬性 (attributes)**: 請回傳該食材的「副分類」陣列，例如：
-     - fruit: ["葉菜類"], ["根莖類"]
-     - meat: ["牛肉類"], ["加工肉品"]
-     ... (請回傳字串陣列)
-2. 日期設定（購買日期、預估過期日期）
-3. 儲存提醒（是否開啟低庫存提醒、提醒門檻）
-4. **位置資訊**：邊界框座標 (x, y, width, height) 必須為 0-1 的相對比例。
+對於每一個辨識到的項目，**所有欄位皆為必填**，請提供以下 JSON 資訊：
+
+1. 產品資訊：
+   - **productName**【必填】: 產品名稱，若無法辨識請填「未知食材」
+   - **category**【必填】: 必須為上述 7 大類別 ID 之一
+   - **attributes**【必填】: 副分類陣列，至少填入一個（例如：["葉菜類"], ["牛肉類"]），若無法判斷請填 ["一般"]
+   - **purchaseQuantity**【必填】: 數量，若無法判斷請填 1
+   - **unit**【必填】: 單位（例如：「個」、「包」、「盒」），若無法判斷請填「份」
+
+2. 日期設定：
+   - **purchaseDate**【必填】: 購買日期，使用今天日期 ${todayDate}
+   - **expiryDate**【必填】: 預估過期日期（格式：YYYY-MM-DD，絕對不能為空值）
+     * 若圖片中有標示有效期限，請使用該日期
+     * 若無法辨識，請根據食材類型推估：
+       - fruit (蔬果類): 今日 + 5天
+       - milk (乳品飲料類): 今日 + 10天
+       - meat (肉品類): 今日 + 3天
+       - seafood (海鮮類): 今日 + 3天
+       - frozen (冷凍類): 今日 + 90天
+       - bake (主食烘焙類): 今日 + 30天
+       - others (其他): 今日 + 60天
+
+3. 儲存提醒：
+   - **lowStockAlert**【必填】: 是否開啟低庫存提醒，若無法判斷請填 true
+   - **lowStockThreshold**【必填】: 提醒門檻，若無法判斷請填 2
+   - **notes**【必填】: 備註說明，若無特別備註請填「無」
+
+4. 位置資訊：
+   - **boundingBox**【必填】: 邊界框座標 (x, y, width, height) 必須為 0-1 的相對比例
+   - **confidence**【必填】: 辨識信心度 0-1，若無法判斷請填 0.8
+
+【重要規則】
+1. 所有欄位都是必填，絕對不能為空字串、null、undefined 或省略任何欄位
+2. expiryDate 必須是有效的 YYYY-MM-DD 格式日期，不可為空
+3. 若無法辨識某欄位，請使用上述的預設值
 
 輸出 JSON 範例：
 {
@@ -124,9 +150,9 @@ export const analyzeMultipleIngredients = async (
       "purchaseQuantity": 1,
       "unit": "碗",
       "purchaseDate": "${todayDate}",
-      "expiryDate": "2025-12-30",
+      "expiryDate": "${new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}",
       "lowStockAlert": true,
-      "lowStockThreshold": 1,
+      "lowStockThreshold": 2,
       "notes": "成品料理",
       "boundingBox": { "x": 0, "y": 0, "width": 1, "height": 1 },
       "confidence": 0.98
