@@ -67,8 +67,46 @@ router.get('/', requireUser, async (req, res) => {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     
-    const notifications = await notificationService.getNotifications(userId, page, limit);
-    res.json({ success: true, data: notifications });
+    const result = await notificationService.getNotifications(userId, page, limit);
+    res.json({
+      success: true,
+      data: result.notifications,
+      pagination: {
+        page,
+        limit,
+        total: result.total
+      },
+      unreadCount: result.unreadCount
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// 5. 發送通知給多個使用者 (供前端呼叫)
+router.post('/send', requireUser, async (req, res) => {
+  try {
+    const { userIds, title, body, type, action } = req.body;
+
+    // 驗證必要欄位
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: 'userIds must be a non-empty array' });
+    }
+    if (!title || !body || !type) {
+      return res.status(400).json({ error: 'title, body, and type are required' });
+    }
+
+    const results = await notificationService.sendToMultiple(userIds, title, body, type, action);
+    
+    res.json({ 
+      success: true, 
+      data: {
+        sent: results.success.length,
+        failed: results.failed.length,
+        details: results
+      }
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Internal Server Error' });
