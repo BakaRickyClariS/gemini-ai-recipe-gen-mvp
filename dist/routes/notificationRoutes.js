@@ -81,6 +81,7 @@ router.get('/', requireUser, async (req, res) => {
 // 5. 發送通知給多個使用者 (供前端呼叫)
 router.post('/send', requireUser, async (req, res) => {
     try {
+        console.log('[Notification] Incoming request /send:', req.body);
         const { userIds, title, body, type, action } = req.body;
         // 驗證必要欄位
         if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
