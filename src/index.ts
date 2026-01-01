@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -26,7 +27,6 @@ import { analyzeMultipleIngredients } from "./services/multipleIngredientsServic
 import recipeRoutes from "./routes/recipeRoutes.js";
 import inventoryRoutes from "./routes/inventoryRoutes.js";
 import { testConnection } from "./db/index.js";
-
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -75,12 +75,13 @@ app.use(
       "X-Requested-With",
       "Accept",
       "Origin",
-      "X-User-Id",  // 前端傳遞使用者 ID 用於庫存 API
+      "X-User-Id", // 前端傳遞使用者 ID 用於庫存 API
     ],
   })
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // Load OpenAPI spec
 const openapiPath = path.join(process.cwd(), "openapi.json");
@@ -93,16 +94,24 @@ const swaggerCdnOptions = {
   customCssUrl: "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
   customJs: [
     "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
-  "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js",
+    "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js",
   ],
 };
-app.use("/docs-cdn", swaggerUi.serve, swaggerUi.setup(openapi, swaggerCdnOptions));
+app.use(
+  "/docs-cdn",
+  swaggerUi.serve,
+  swaggerUi.setup(openapi, swaggerCdnOptions)
+);
 
 // ===== 食譜儲存 API =====
 app.use("/api/v1/recipes", recipeRoutes);
 
 import notificationRoutes from "./routes/notificationRoutes.js";
 import cronRoutes from "./routes/cronRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
+
+// ===== Auth API (Session Sync) =====
+app.use("/api/v1/auth", authRoutes);
 
 // ... (existing code)
 
@@ -134,8 +143,10 @@ app.get("/", (_req, res) => {
       recipeSuggestions: "GET /api/v1/ai/recipe/suggestions",
       analyzeImage: "POST /api/v1/ai/analyze-image",
       savedRecipes: "GET/POST /api/v1/recipes (食譜儲存)",
-      inventory: "GET/POST /api/v1/refrigerators/:refrigeratorId/inventory (庫存管理)",
-      inventorySettings: "GET/PUT /api/v1/refrigerators/:refrigeratorId/inventory/settings (庫存設定)",
+      inventory:
+        "GET/POST /api/v1/refrigerators/:refrigeratorId/inventory (庫存管理)",
+      inventorySettings:
+        "GET/PUT /api/v1/refrigerators/:refrigeratorId/inventory/settings (庫存設定)",
       notifications: "POST /api/v1/notifications/token (推播註冊)",
     },
     features: {
@@ -145,7 +156,7 @@ app.get("/", (_req, res) => {
       recipeStorage: "支援儲存 AI 生成的食譜",
       inventoryManagement: "支援庫存食材管理 (CRUD、消耗、統計)",
       pushNotifications: "支援 FCM 推播、通知中心與過期提醒 Cron Job",
-      cronJobs: "支援定時任務（如：檢查食材過期）"
+      cronJobs: "支援定時任務（如：檢查食材過期）",
     },
   });
 });
@@ -340,7 +351,7 @@ app.post(
         success: false,
         error: '請提供 imageUrl 或使用 form-data 上傳檔案（欄位名稱為 "file"）',
       });
-  } catch (err: any) {
+    } catch (err: any) {
       console.error("[Analyze Image Error]", err);
       return res.status(500).json({
         success: false,
@@ -360,36 +371,41 @@ app.post(
       let imageUrl: string | undefined = req.body?.imageUrl;
       const cropImages = req.body?.cropImages !== "false"; // 預設 true
       const maxIngredients = parseInt(req.body?.maxIngredients) || 10;
-      
+
       let imageSource: string | Buffer;
 
       // 1️⃣ 有上傳檔案（本地模式）
       if (req.file) {
         // 使用檔案路徑，讓 service 決定如何讀取
         imageSource = req.file.path;
-      } 
+      }
       // 2️⃣ 若有提供 imageUrl
       else if (imageUrl) {
         imageSource = imageUrl;
       } else {
         return res.status(400).json({
           success: false,
-          error: '請提供 imageUrl 或使用 form-data 上傳檔案（欄位名稱為 "file"）',
+          error:
+            '請提供 imageUrl 或使用 form-data 上傳檔案（欄位名稱為 "file"）',
         });
       }
 
-      console.log(`[Analyze Multiple] Start analyzing: ${req.file ? 'File' : 'URL'}`);
-      
+      console.log(
+        `[Analyze Multiple] Start analyzing: ${req.file ? "File" : "URL"}`
+      );
+
       const result = await analyzeMultipleIngredients(imageSource, {
         cropImages,
-        maxIngredients
+        maxIngredients,
       });
 
       // 如果是本地檔案，處理完後刪除暫存檔
       if (req.file) {
-         try {
-           fs.unlinkSync(req.file.path);
-         } catch(e) { /* ignore */ }
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (e) {
+          /* ignore */
+        }
       }
 
       return res.json({
@@ -397,15 +413,16 @@ app.post(
         data: result,
         timestamp: new Date().toISOString(),
       });
-
-    } catch(err: any) {
+    } catch (err: any) {
       console.error("[Analyze Multiple Error]", err);
-      
+
       // 如果是本地檔案，出錯也要刪除
       if (req.file) {
-         try {
-           fs.unlinkSync(req.file.path);
-         } catch(e) { /* ignore */ }
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (e) {
+          /* ignore */
+        }
       }
 
       return res.status(500).json({
