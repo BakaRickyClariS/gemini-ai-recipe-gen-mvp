@@ -114,7 +114,8 @@ app.get("/", (_req, res) => {
             dailyLimit: "每日查詢次數限制",
             recipeStorage: "支援儲存 AI 生成的食譜",
             inventoryManagement: "支援庫存食材管理 (CRUD、消耗、統計)",
-            pushNotifications: "支援 FCM 推播與通知中心",
+            pushNotifications: "支援 FCM 推播、通知中心與過期提醒 Cron Job",
+            cronJobs: "支援定時任務（如：檢查食材過期）"
         },
     });
 });
