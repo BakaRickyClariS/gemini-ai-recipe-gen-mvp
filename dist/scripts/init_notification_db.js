@@ -11,12 +11,23 @@ async function initNotificationDB() {
         fcm_token TEXT,
         notify_push BOOLEAN DEFAULT true,
         notify_expiry BOOLEAN DEFAULT true,
+        notify_low_stock BOOLEAN DEFAULT true,
+        days_before_expiry INTEGER DEFAULT 3,
         notify_marketing BOOLEAN DEFAULT false,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
     `;
         await query(createUserTableSQL);
         console.log("✅ Users 表建立成功 (或已存在)");
+        // 1.1. 升級現有資料庫：新增欄位 (如果不存在)
+        try {
+            await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_low_stock BOOLEAN DEFAULT true;`);
+            await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS days_before_expiry INTEGER DEFAULT 3;`);
+            console.log("✅ Users 表欄位升級成功 (或已存在)");
+        }
+        catch (err) {
+            console.warn("⚠️ Users 表欄位升級警告:", err);
+        }
         // 2. 建立 Notifications 表
         const createNotificationTableSQL = `
       CREATE TABLE IF NOT EXISTS notifications (

@@ -79,20 +79,35 @@ export const analyzeImageByUrl = async (imageUrl) => {
     const prompt = `
 你是一位食材辨識助理。請分析圖片中的食材或食物，並輸出以下 JSON 結構（僅輸出 JSON，不要其他文字）：
 
+所有欄位皆為【必填】，不可為空字串、null 或省略！
+
 {
-  "productName": string,           // 產品名稱（例如：「鮮奶」、「花椰菜」、「雞蛋」）
-  "category": string,               // 分類（例如：「乳製品飲料類」、「蔬果類」、「肉蛋類」）
-  "attributes": string[],           // 屬性（例如：["鮮奶類"], ["新鮮類"]）
-  "purchaseQuantity": number,       // 建議購買數量（根據圖片中的數量估計，預設為 1）
-  "unit": string,                   // 單位（例如：「瓶」、「顆」、「盒」、「包」、「公斤」）
-  "purchaseDate": string,           // 購買日期（使用今天的日期，格式：YYYY-MM-DD）
-  "expiryDate": string,             // 預計過期日期（根據食材類型合理推估，格式：YYYY-MM-DD）
-  "lowStockAlert": boolean,         // 是否開啟低庫存提醒（預設 true）
-  "lowStockThreshold": number,      // 低庫存數量通知門檻（預設 2）
-  "notes": string                   // 備註（例如：「新鮮度佳」、「請盡快食用」、「冷藏保存」）
+  "productName": string,           // 【必填】產品名稱（例如：「鮮奶」、「花椰菜」、「雞蛋」），若無法辨識請填「未知食材」
+  "category": string,               // 【必填】分類，必須為以下其中之一：「乳製品飲料類」、「蔬果類」、「肉蛋類」、「海鮮類」、「調味料類」、「加工食品類」、「冷凍食品類」、「其他」
+  "attributes": string[],           // 【必填】屬性陣列，至少填入一個屬性（例如：["鮮奶類"], ["新鮮類"], ["冷藏類"]），若無法判斷請填 ["一般"]
+  "purchaseQuantity": number,       // 【必填】購買數量（根據圖片中的數量估計，若無法判斷請填 1）
+  "unit": string,                   // 【必填】單位（例如：「瓶」、「顆」、「盒」、「包」、「公斤」、「份」），若無法判斷請填「份」
+  "purchaseDate": string,           // 【必填】購買日期，使用今天的日期，格式：YYYY-MM-DD
+  "expiryDate": string,             // 【必填】預計過期日期（格式：YYYY-MM-DD，絕對不能為空值）
+                                     //   - 若圖片中有標示有效期限，請使用該日期
+                                     //   - 若無法辨識，請根據食材類型推估：
+                                     //     * 新鮮蔬果類：今日 + 5天
+                                     //     * 乳製品類：今日 + 10天
+                                     //     * 生鮮肉類/海鮮：今日 + 3天
+                                     //     * 蛋類：今日 + 14天
+                                     //     * 加工食品/罐頭：今日 + 60天
+                                     //     * 冷凍食品：今日 + 90天
+                                     //     * 其他：今日 + 7天
+  "lowStockAlert": boolean,         // 【必填】是否開啟低庫存提醒，若無法判斷請填 true
+  "lowStockThreshold": number,      // 【必填】低庫存數量通知門檻，若無法判斷請填 2
+  "notes": string                   // 【必填】備註（例如：「新鮮度佳」、「請盡快食用」、「冷藏保存」），若無特別備註請填「無」
 }
 
-請使用繁體中文。今天的日期是 ${new Date().toISOString().split("T")[0]}。
+重要規則：
+1. 所有欄位都是必填，絕對不能為空字串、null、undefined 或省略任何欄位
+2. 若無法辨識某欄位，請使用上述的預設值
+3. 請使用繁體中文
+4. 今天的日期是 ${new Date().toISOString().split("T")[0]}
 `;
     // 使用 fallback 機制執行 AI 請求
     const { result } = await executeWithFallback("vision", async (model) => {
@@ -128,20 +143,35 @@ export const analyzeLocalImage = async (filePath) => {
     const prompt = `
 你是一位食材辨識助理。請分析圖片中的食材或食物，並輸出以下 JSON 結構（僅輸出 JSON，不要其他文字）：
 
+所有欄位皆為【必填】，不可為空字串、null 或省略！
+
 {
-  "productName": string,           // 產品名稱（例如：「鮮奶」、「花椰菜」、「雞蛋」）
-  "category": string,               // 分類（例如：「乳製品飲料類」、「蔬果類」、「肉蛋類」）
-  "attributes": string[],           // 屬性（例如：["鮮奶類"], ["新鮮類"]）
-  "purchaseQuantity": number,       // 建議購買數量（根據圖片中的數量估計，預設為 1）
-  "unit": string,                   // 單位（例如：「瓶」、「顆」、「盒」、「包」、「公斤」）
-  "purchaseDate": string,           // 購買日期（使用今天的日期，格式：YYYY-MM-DD）
-  "expiryDate": string,             // 預計過期日期（根據食材類型合理推估，格式：YYYY-MM-DD）
-  "lowStockAlert": boolean,         // 是否開啟低庫存提醒（預設 true）
-  "lowStockThreshold": number,      // 低庫存數量通知門檻（預設 2）
-  "notes": string                   // 備註（例如：「新鮮度佳」、「請盡快食用」、「冷藏保存」）
+  "productName": string,           // 【必填】產品名稱（例如：「鮮奶」、「花椰菜」、「雞蛋」），若無法辨識請填「未知食材」
+  "category": string,               // 【必填】分類，必須為以下其中之一：「乳製品飲料類」、「蔬果類」、「肉蛋類」、「海鮮類」、「調味料類」、「加工食品類」、「冷凍食品類」、「其他」
+  "attributes": string[],           // 【必填】屬性陣列，至少填入一個屬性（例如：["鮮奶類"], ["新鮮類"], ["冷藏類"]），若無法判斷請填 ["一般"]
+  "purchaseQuantity": number,       // 【必填】購買數量（根據圖片中的數量估計，若無法判斷請填 1）
+  "unit": string,                   // 【必填】單位（例如：「瓶」、「顆」、「盒」、「包」、「公斤」、「份」），若無法判斷請填「份」
+  "purchaseDate": string,           // 【必填】購買日期，使用今天的日期，格式：YYYY-MM-DD
+  "expiryDate": string,             // 【必填】預計過期日期（格式：YYYY-MM-DD，絕對不能為空值）
+                                     //   - 若圖片中有標示有效期限，請使用該日期
+                                     //   - 若無法辨識，請根據食材類型推估：
+                                     //     * 新鮮蔬果類：今日 + 5天
+                                     //     * 乳製品類：今日 + 10天
+                                     //     * 生鮮肉類/海鮮：今日 + 3天
+                                     //     * 蛋類：今日 + 14天
+                                     //     * 加工食品/罐頭：今日 + 60天
+                                     //     * 冷凍食品：今日 + 90天
+                                     //     * 其他：今日 + 7天
+  "lowStockAlert": boolean,         // 【必填】是否開啟低庫存提醒，若無法判斷請填 true
+  "lowStockThreshold": number,      // 【必填】低庫存數量通知門檻，若無法判斷請填 2
+  "notes": string                   // 【必填】備註（例如：「新鮮度佳」、「請盡快食用」、「冷藏保存」），若無特別備註請填「無」
 }
 
-請使用繁體中文。今天的日期是 ${new Date().toISOString().split("T")[0]}。
+重要規則：
+1. 所有欄位都是必填，絕對不能為空字串、null、undefined 或省略任何欄位
+2. 若無法辨識某欄位，請使用上述的預設值
+3. 請使用繁體中文
+4. 今天的日期是 ${new Date().toISOString().split("T")[0]}
 `;
     // 使用 fallback 機制執行 AI 請求
     const { result } = await executeWithFallback("vision", async (model) => {
