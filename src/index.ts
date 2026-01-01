@@ -102,6 +102,7 @@ app.use("/docs-cdn", swaggerUi.serve, swaggerUi.setup(openapi, swaggerCdnOptions
 app.use("/api/v1/recipes", recipeRoutes);
 
 import notificationRoutes from "./routes/notificationRoutes.js";
+import cronRoutes from "./routes/cronRoutes.js";
 
 // ... (existing code)
 
@@ -110,6 +111,9 @@ app.use("/api/v1/refrigerators/:refrigeratorId/inventory", inventoryRoutes);
 
 // ===== 推播通知 API =====
 app.use("/api/v1/notifications", notificationRoutes);
+
+// ===== Cron Job API =====
+app.use("/api/cron", cronRoutes);
 
 // 測試資料庫連線（背景執行）
 testConnection().catch(console.error);
@@ -140,7 +144,8 @@ app.get("/", (_req, res) => {
       dailyLimit: "每日查詢次數限制",
       recipeStorage: "支援儲存 AI 生成的食譜",
       inventoryManagement: "支援庫存食材管理 (CRUD、消耗、統計)",
-      pushNotifications: "支援 FCM 推播與通知中心",
+      pushNotifications: "支援 FCM 推播、通知中心與過期提醒 Cron Job",
+      cronJobs: "支援定時任務（如：檢查食材過期）"
     },
   });
 });

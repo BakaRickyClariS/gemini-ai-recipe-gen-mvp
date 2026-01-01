@@ -19,13 +19,15 @@ export const notificationService = {
      */
     getSettings: async (userId) => {
         // 確保使用者存在，若不存在回傳預設值
-        const sql = `SELECT notify_push, notify_expiry, notify_marketing FROM users WHERE id = $1`;
+        const sql = `SELECT notify_push, notify_expiry, notify_low_stock, days_before_expiry, notify_marketing FROM users WHERE id = $1`;
         const result = await query(sql, [userId]);
         if (result.rowCount === 0) {
             // 預設值
             return {
                 notifyPush: true,
                 notifyExpiry: true,
+                notifyLowStock: true,
+                daysBeforeExpiry: 3,
                 notifyMarketing: false
             };
         }
@@ -33,6 +35,8 @@ export const notificationService = {
         return {
             notifyPush: row.notify_push,
             notifyExpiry: row.notify_expiry,
+            notifyLowStock: row.notify_low_stock ?? true,
+            daysBeforeExpiry: row.days_before_expiry ?? 3,
             notifyMarketing: row.notify_marketing
         };
     },
@@ -58,6 +62,14 @@ export const notificationService = {
             updates.push(`notify_expiry = $${paramIndex++}`);
             values.push(settings.notifyExpiry);
         }
+        if (settings.notifyLowStock !== undefined) {
+            updates.push(`notify_low_stock = $${paramIndex++}`);
+            values.push(settings.notifyLowStock);
+        }
+        if (settings.daysBeforeExpiry !== undefined) {
+            updates.push(`days_before_expiry = $${paramIndex++}`);
+            values.push(settings.daysBeforeExpiry);
+        }
         if (settings.notifyMarketing !== undefined) {
             updates.push(`notify_marketing = $${paramIndex++}`);
             values.push(settings.notifyMarketing);
@@ -72,6 +84,15 @@ export const notificationService = {
      */
     getNotifications: async (userId, page = 1, limit = 20) => {
         const offset = (page - 1) * limit;
+        // 查詢總數
+        const countSql = `SELECT COUNT(*) as total FROM notifications WHERE user_id = $1`;
+        const countResult = await query(countSql, [userId]);
+        const total = parseInt(countResult.rows[0]?.total || '0', 10);
+        // 查詢未讀數
+        const unreadSql = `SELECT COUNT(*) as unread FROM notifications WHERE user_id = $1 AND is_read = false`;
+        const unreadResult = await query(unreadSql, [userId]);
+        const unreadCount = parseInt(unreadResult.rows[0]?.unread || '0', 10);
+        // 查詢分頁資料
         const sql = `
       SELECT id, type, title, message, is_read, action_type, action_payload, created_at
       FROM notifications
@@ -81,7 +102,7 @@ export const notificationService = {
     `;
         const result = await query(sql, [userId, limit, offset]);
         // 轉換成前端易讀格式
-        return result.rows.map(row => ({
+        const notifications = result.rows.map(row => ({
             id: row.id,
             type: row.type,
             title: row.title,
@@ -93,6 +114,7 @@ export const notificationService = {
             },
             createdAt: row.created_at
         }));
+        return { notifications, total, unreadCount };
     },
     /**
      * 發送通知核心邏輯
@@ -146,5 +168,25 @@ export const notificationService = {
                 }
             }
         }
+    },
+    /**
+     * 發送通知給多個使用者（供前端呼叫）
+     */
+    sendToMultiple: async (userIds, title, body, type, action) => {
+        const results = {
+            success: [],
+            failed: []
+        };
+        for (const userId of userIds) {
+            try {
+                await notificationService.send(userId, title, body, type, action);
+                results.success.push(userId);
+            }
+            catch (error) {
+                console.error(`[Notification] Failed to send to ${userId}:`, error);
+                results.failed.push(userId);
+            }
+        }
+        return results;
     }
 };
