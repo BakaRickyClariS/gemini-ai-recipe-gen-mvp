@@ -322,6 +322,8 @@ export const consumeInventoryItem = async (id, refrigeratorId, input) => {
     // TODO: 可以在此記錄消耗歷史
     return {
         id,
+        name: item.name,
+        unit: item.unit,
         remainingQuantity: newQuantity,
         consumedAt,
     };

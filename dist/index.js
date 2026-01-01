@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -61,6 +62,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 // Load OpenAPI spec
 const openapiPath = path.join(process.cwd(), "openapi.json");
 const openapi = JSON.parse(fs.readFileSync(openapiPath, "utf-8"));
@@ -79,6 +81,9 @@ app.use("/docs-cdn", swaggerUi.serve, swaggerUi.setup(openapi, swaggerCdnOptions
 app.use("/api/v1/recipes", recipeRoutes);
 import notificationRoutes from "./routes/notificationRoutes.js";
 import cronRoutes from "./routes/cronRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
+// ===== Auth API (Session Sync) =====
+app.use("/api/v1/auth", authRoutes);
 // ... (existing code)
 // ===== 庫存管理 API =====
 app.use("/api/v1/refrigerators/:refrigeratorId/inventory", inventoryRoutes);
@@ -115,7 +120,7 @@ app.get("/", (_req, res) => {
             recipeStorage: "支援儲存 AI 生成的食譜",
             inventoryManagement: "支援庫存食材管理 (CRUD、消耗、統計)",
             pushNotifications: "支援 FCM 推播、通知中心與過期提醒 Cron Job",
-            cronJobs: "支援定時任務（如：檢查食材過期）"
+            cronJobs: "支援定時任務（如：檢查食材過期）",
         },
     });
 });
@@ -314,17 +319,19 @@ app.post("/api/v1/ai/analyze-image/multiple", upload.single("file"), async (req,
                 error: '請提供 imageUrl 或使用 form-data 上傳檔案（欄位名稱為 "file"）',
             });
         }
-        console.log(`[Analyze Multiple] Start analyzing: ${req.file ? 'File' : 'URL'}`);
+        console.log(`[Analyze Multiple] Start analyzing: ${req.file ? "File" : "URL"}`);
         const result = await analyzeMultipleIngredients(imageSource, {
             cropImages,
-            maxIngredients
+            maxIngredients,
         });
         // 如果是本地檔案，處理完後刪除暫存檔
         if (req.file) {
             try {
                 fs.unlinkSync(req.file.path);
             }
-            catch (e) { /* ignore */ }
+            catch (e) {
+                /* ignore */
+            }
         }
         return res.json({
             success: true,
@@ -339,7 +346,9 @@ app.post("/api/v1/ai/analyze-image/multiple", upload.single("file"), async (req,
             try {
                 fs.unlinkSync(req.file.path);
             }
-            catch (e) { /* ignore */ }
+            catch (e) {
+                /* ignore */
+            }
         }
         return res.status(500).json({
             success: false,

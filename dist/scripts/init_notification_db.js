@@ -57,6 +57,16 @@ async function initNotificationDB() {
         catch (err) {
             console.warn("⚠️ 索引建立警告:", err);
         }
+        // 4. 升級現有 Notifications 表：新增 category 欄位
+        try {
+            await query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT 'system';`);
+            // 更新舊資料的 category (若有)
+            // await query(`UPDATE notifications SET category = 'stock' WHERE category IS NULL;`);
+            console.log("✅ Notifications 表欄位 (category) 升級成功 (或已存在)");
+        }
+        catch (err) {
+            console.warn("⚠️ Notifications 表欄位升級警告:", err);
+        }
         console.log("🎉 資料庫 Schema 更新完成！");
     }
     catch (error) {
