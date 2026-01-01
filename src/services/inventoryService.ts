@@ -444,6 +444,8 @@ export const consumeInventoryItem = async (
   input: ConsumeInventoryInput
 ): Promise<{
   id: string;
+  name: string;
+  unit: string;
   remainingQuantity: number;
   consumedAt: string;
 } | null> => {
@@ -470,6 +472,8 @@ export const consumeInventoryItem = async (
 
   return {
     id,
+    name: item.name,
+    unit: item.unit,
     remainingQuantity: newQuantity,
     consumedAt,
   };
