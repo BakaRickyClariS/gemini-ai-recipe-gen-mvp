@@ -14,5 +14,11 @@
       "src": "/(.*)",
       "dest": "dist/index.js"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/check-expiry",
+      "schedule": "0 8 * * *"
+    }
   ]
 }
