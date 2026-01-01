@@ -91,9 +91,11 @@ router.post('/send', requireUser, async (req, res) => {
 
     // 驗證必要欄位
     if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      console.error('[Notification] Send Error: userIds invalid:', { userIds, body: req.body });
       return res.status(400).json({ error: 'userIds must be a non-empty array' });
     }
     if (!title || !body || !type) {
+      console.error('[Notification] Send Error: missing fields:', { title, body, type, reqBody: req.body });
       return res.status(400).json({ error: 'title, body, and type are required' });
     }
 
