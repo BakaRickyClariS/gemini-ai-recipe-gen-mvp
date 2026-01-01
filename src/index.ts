@@ -102,6 +102,7 @@ app.use("/docs-cdn", swaggerUi.serve, swaggerUi.setup(openapi, swaggerCdnOptions
 app.use("/api/v1/recipes", recipeRoutes);
 
 import notificationRoutes from "./routes/notificationRoutes.js";
+import cronRoutes from "./routes/cronRoutes.js";
 
 // ... (existing code)
 
@@ -110,6 +111,9 @@ app.use("/api/v1/refrigerators/:refrigeratorId/inventory", inventoryRoutes);
 
 // ===== 推播通知 API =====
 app.use("/api/v1/notifications", notificationRoutes);
+
+// ===== Cron Job API =====
+app.use("/api/cron", cronRoutes);
 
 // 測試資料庫連線（背景執行）
 testConnection().catch(console.error);
