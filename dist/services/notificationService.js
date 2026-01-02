@@ -222,6 +222,7 @@ export const notificationService = {
         // 4. 發送 FCM（多裝置支援）
         // 取得使用者所有裝置的 Token
         const tokens = await notificationService.getUserTokens(userId);
+        console.log(`[Notification] User ${userId}: ${tokens.length} FCM tokens found, notify_push=${user.notify_push}`);
         const shouldSendPush = user.notify_push !== false && tokens.length > 0;
         // 細部過濾
         let shouldPush = shouldSendPush;
@@ -229,8 +230,12 @@ export const notificationService = {
             shouldPush = false;
         if (type === "marketing" && !user.notify_marketing)
             shouldPush = false;
+        if (!shouldPush) {
+            console.log(`[Notification] Skipping FCM for user ${userId}: shouldSendPush=${shouldSendPush}, type=${type}, notify_expiry=${user.notify_expiry}`);
+        }
         if (shouldPush && tokens.length > 0) {
             const failedTokens = [];
+            console.log(`[Notification] Sending FCM to ${tokens.length} devices for user ${userId}`);
             for (const token of tokens) {
                 try {
                     await messaging.send({
@@ -242,6 +247,7 @@ export const notificationService = {
                             actionId: action?.payload?.id || "",
                         },
                     });
+                    console.log(`[Notification] FCM sent successfully to token: ${token.substring(0, 20)}...`);
                 }
                 catch (error) {
                     console.error("[Notification] FCM Send Error:", error);
