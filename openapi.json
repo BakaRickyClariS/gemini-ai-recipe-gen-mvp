@@ -1,14 +1,26 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Recipe API",
-    "version": "2.4.0",
-    "description": "AI 食譜生成 API - 支援 Gemini AI 多食譜推薦與 SSE Streaming"
+    "title": "FuFood AI Recipe API",
+    "version": "2.5.0",
+    "description": "AI 食譜生成 API - 支援 Gemini AI 多食譜推薦、SSE Streaming、庫存管理、FCM 多裝置推播"
   },
   "servers": [
     {
-      "url": "/"
+      "url": "/",
+      "description": "Current Server"
     }
+  ],
+  "tags": [
+    { "name": "系統", "description": "健康檢查與系統狀態" },
+    { "name": "認證", "description": "Session 同步與登出" },
+    { "name": "AI 食譜", "description": "AI 食譜生成與建議" },
+    { "name": "AI 圖片分析", "description": "食材影像辨識" },
+    { "name": "媒體上傳", "description": "圖片上傳" },
+    { "name": "食譜儲存", "description": "食譜 CRUD 操作" },
+    { "name": "庫存管理", "description": "冰箱食材庫存管理" },
+    { "name": "推播通知", "description": "FCM 推播與通知中心" },
+    { "name": "排程任務", "description": "Cron Job 觸發端點" }
   ],
   "paths": {
     "/health": {
@@ -23,7 +35,10 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string", "example": "✅ 食譜 API 運行正常" },
+                    "status": {
+                      "type": "string",
+                      "example": "✅ 食譜 API 運行正常"
+                    },
                     "timestamp": { "type": "string", "format": "date-time" },
                     "version": { "type": "string", "example": "1.0.0" }
                   }
@@ -46,9 +61,83 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "uptime": { "type": "number", "description": "伺服器運行時間（秒）" },
-                    "memory": { "type": "object", "description": "記憶體使用情況" },
+                    "uptime": {
+                      "type": "number",
+                      "description": "伺服器運行時間（秒）"
+                    },
+                    "memory": {
+                      "type": "object",
+                      "description": "記憶體使用情況"
+                    },
                     "pid": { "type": "integer", "description": "程序 ID" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/sync-session": {
+      "post": {
+        "summary": "同步 Session",
+        "description": "前端登入後將 Token 同步給 AI 後端，設定 HttpOnly Cookie",
+        "tags": ["認證"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": { "type": "string", "description": "JWT Token" },
+                  "userId": { "type": "string", "description": "使用者 ID" }
+                },
+                "required": ["token"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session 同步成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": {
+                      "type": "string",
+                      "example": "Session synced successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "缺少 Token" }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "summary": "登出",
+        "description": "清除 AI 後端的 HttpOnly Cookie",
+        "tags": ["認證"],
+        "responses": {
+          "200": {
+            "description": "登出成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": {
+                      "type": "string",
+                      "example": "Logged out successfully"
+                    }
                   }
                 }
               }
@@ -72,9 +161,13 @@
                     "status": { "type": "boolean", "example": true },
                     "message": { "type": "string", "example": "ok" },
                     "data": {
-                      "type": "array",
-                      "items": { "type": "string" },
-                      "example": ["台灣感性的食物", "晚餐想吃日式", "聖誕節大餐", "想念泰國料理"]
+                      "type": "object",
+                      "properties": {
+                        "suggestions": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        }
+                      }
                     }
                   }
                 }
@@ -92,9 +185,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AIRecipeRequest"
-              }
+              "schema": { "$ref": "#/components/schemas/AIRecipeRequest" }
             }
           }
         },
@@ -123,7 +214,7 @@
     "/api/v1/ai/recipe/stream": {
       "post": {
         "summary": "AI 食譜生成（SSE Streaming）",
-        "description": "使用 Server-Sent Events 即時串流回應，提供更好的使用者體驗",
+        "description": "使用 Server-Sent Events 即時串流回應",
         "tags": ["AI 食譜"],
         "requestBody": {
           "required": true,
@@ -137,7 +228,7 @@
           {
             "name": "X-User-Id",
             "in": "header",
-            "description": "使用者 ID（用於每日查詢限制）",
+            "description": "使用者 ID",
             "schema": { "type": "string" }
           }
         ],
@@ -148,7 +239,7 @@
               "text/event-stream": {
                 "schema": {
                   "type": "string",
-                  "description": "SSE 事件串流，包含 start、chunk、progress、done、error 事件"
+                  "description": "SSE 事件串流"
                 }
               }
             }
@@ -167,7 +258,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "file": { "type": "string", "format": "binary", "description": "要上傳的圖片檔案" }
+                  "file": { "type": "string", "format": "binary" }
                 }
               }
             }
@@ -185,8 +276,8 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "url": { "type": "string", "example": "https://res.cloudinary.com/..." },
-                        "publicId": { "type": "string", "example": "fufood/..." }
+                        "url": { "type": "string" },
+                        "publicId": { "type": "string" }
                       }
                     }
                   }
@@ -199,7 +290,7 @@
     },
     "/api/v1/ai/analyze-image": {
       "post": {
-        "summary": "分析食材圖片",
+        "summary": "分析食材圖片（單一食材）",
         "tags": ["AI 圖片分析"],
         "requestBody": {
           "required": true,
@@ -229,27 +320,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": { "type": "boolean" },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "productName": { "type": "string" },
-                        "category": { "type": "string" },
-                        "attributes": { "type": "string" },
-                        "purchaseQuantity": { "type": "number" },
-                        "unit": { "type": "string" },
-                        "purchaseDate": { "type": "string" },
-                        "expiryDate": { "type": "string" },
-                        "lowStockAlert": { "type": "boolean" },
-                        "lowStockThreshold": { "type": "number" },
-                        "notes": { "type": "string" },
-                        "imageUrl": { "type": "string", "nullable": true }
-                      }
-                    },
-                    "timestamp": { "type": "string", "format": "date-time" }
-                  }
+                  "$ref": "#/components/schemas/ImageAnalysisResponse"
                 }
               }
             }
@@ -292,28 +363,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": { "type": "boolean", "example": true },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "originalImageUrl": { "type": "string" },
-                        "totalCount": { "type": "integer" },
-                        "ingredients": {
-                          "type": "array",
-                          "items": {
-                            "allOf": [
-                              { "$ref": "#/components/schemas/IngredientRecognitionResult" },
-                              { "type": "object", "properties": { "boundingBox": { "type": "array" } } }
-                            ]
-                          }
-                        },
-                        "analyzedAt": { "type": "string", "format": "date-time" }
-                      }
-                    },
-                    "timestamp": { "type": "string", "format": "date-time" }
-                  }
+                  "$ref": "#/components/schemas/MultipleImageAnalysisResponse"
                 }
               }
             }
@@ -326,36 +376,30 @@
         "summary": "取得已儲存的食譜列表",
         "tags": ["食譜儲存"],
         "parameters": [
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          },
           { "name": "userId", "in": "query", "schema": { "type": "string" } },
-          { "name": "X-User-Id", "in": "header", "schema": { "type": "string" } },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
-          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 20 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": { "type": "integer", "default": 0 }
+          }
         ],
         "responses": {
           "200": {
             "description": "食譜列表",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": { "type": "boolean", "example": true },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "recipes": { "type": "array", "items": { "$ref": "#/components/schemas/SavedRecipe" } },
-                        "pagination": {
-                          "type": "object",
-                          "properties": {
-                            "total": { "type": "integer" },
-                            "limit": { "type": "integer" },
-                            "offset": { "type": "integer" }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
+                "schema": { "$ref": "#/components/schemas/RecipeListResponse" }
               }
             }
           }
@@ -365,14 +409,464 @@
         "summary": "儲存新食譜",
         "tags": ["食譜儲存"],
         "parameters": [
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "string" } }
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
         ],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateRecipeInput" } } }
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateRecipeInput" }
+            }
+          }
         },
         "responses": {
           "201": { "description": "食譜建立成功" }
+        }
+      }
+    },
+    "/api/v1/recipes/{id}": {
+      "get": {
+        "summary": "取得單一食譜",
+        "tags": ["食譜儲存"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "食譜詳情" },
+          "404": { "description": "找不到該食譜" }
+        }
+      },
+      "put": {
+        "summary": "更新食譜",
+        "tags": ["食譜儲存"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateRecipeInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "更新成功" },
+          "404": { "description": "找不到該食譜" }
+        }
+      },
+      "delete": {
+        "summary": "刪除食譜",
+        "tags": ["食譜儲存"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "刪除成功" },
+          "404": { "description": "找不到該食譜" }
+        }
+      }
+    },
+    "/api/v1/refrigerators/{refrigeratorId}/inventory": {
+      "get": {
+        "summary": "取得庫存列表",
+        "tags": ["庫存管理"],
+        "parameters": [
+          {
+            "name": "refrigeratorId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 50 }
+          },
+          { "name": "category", "in": "query", "schema": { "type": "string" } },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["fresh", "expiring", "expired"]
+            }
+          },
+          {
+            "name": "include",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "description": "包含額外資料，如 stats,summary"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "庫存列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "新增食材",
+        "tags": ["庫存管理"],
+        "parameters": [
+          {
+            "name": "refrigeratorId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateInventoryInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "新增成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "boolean" },
+                    "message": { "type": "string" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "string", "format": "uuid" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/refrigerators/{refrigeratorId}/inventory/categories": {
+      "get": {
+        "summary": "取得分類列表",
+        "tags": ["庫存管理"],
+        "parameters": [
+          {
+            "name": "refrigeratorId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "分類列表" }
+        }
+      }
+    },
+    "/api/v1/refrigerators/{refrigeratorId}/inventory/summary": {
+      "get": {
+        "summary": "取得庫存摘要",
+        "tags": ["庫存管理"],
+        "parameters": [
+          {
+            "name": "refrigeratorId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "庫存摘要統計" }
+        }
+      }
+    },
+    "/api/v1/refrigerators/{refrigeratorId}/inventory/settings": {
+      "get": {
+        "summary": "取得庫存設定",
+        "tags": ["庫存管理"],
+        "parameters": [
+          {
+            "name": "refrigeratorId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "庫存設定" }
+        }
+      },
+      "put": {
+        "summary": "更新庫存設定（完整覆蓋）",
+        "tags": ["庫存管理"],
+        "parameters": [
+          {
+            "name": "refrigeratorId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/InventorySettings" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "更新成功" }
+        }
+      },
+      "patch": {
+        "summary": "更新庫存設定（部分更新）",
+        "tags": ["庫存管理"],
+        "parameters": [
+          {
+            "name": "refrigeratorId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/InventorySettings" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "更新成功" }
+        }
+      }
+    },
+    "/api/v1/refrigerators/{refrigeratorId}/inventory/{id}": {
+      "get": {
+        "summary": "取得單筆食材",
+        "tags": ["庫存管理"],
+        "parameters": [
+          {
+            "name": "refrigeratorId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "食材詳情" },
+          "404": { "description": "找不到該食材" }
+        }
+      },
+      "put": {
+        "summary": "更新食材",
+        "tags": ["庫存管理"],
+        "parameters": [
+          {
+            "name": "refrigeratorId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateInventoryInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "更新成功" },
+          "404": { "description": "找不到該食材" }
+        }
+      },
+      "delete": {
+        "summary": "刪除食材",
+        "tags": ["庫存管理"],
+        "parameters": [
+          {
+            "name": "refrigeratorId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "刪除成功" },
+          "404": { "description": "找不到該食材" }
+        }
+      }
+    },
+    "/api/v1/refrigerators/{refrigeratorId}/inventory/{id}/consume": {
+      "post": {
+        "summary": "消耗食材",
+        "tags": ["庫存管理"],
+        "parameters": [
+          {
+            "name": "refrigeratorId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ConsumeInventoryInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "消耗成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "boolean" },
+                    "message": { "type": "string" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": { "type": "string" },
+                        "name": { "type": "string" },
+                        "remainingQuantity": { "type": "number" },
+                        "unit": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "消耗數量超過庫存" },
+          "404": { "description": "找不到該食材" }
         }
       }
     },
@@ -381,9 +875,30 @@
         "summary": "取得通知列表",
         "tags": ["推播通知"],
         "parameters": [
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "string" } },
-          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 20 }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["stock", "inspiration", "official"]
+            }
+          }
         ],
         "responses": {
           "200": {
@@ -391,20 +906,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": { "type": "boolean" },
-                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Notification" } },
-                    "pagination": {
-                      "type": "object",
-                      "properties": {
-                        "page": { "type": "integer" },
-                        "limit": { "type": "integer" },
-                        "total": { "type": "integer" }
-                      }
-                    },
-                    "unreadCount": { "type": "integer" }
-                  }
+                  "$ref": "#/components/schemas/NotificationListResponse"
                 }
               }
             }
@@ -414,10 +916,15 @@
     },
     "/api/v1/notifications/token": {
       "post": {
-        "summary": "註冊 FCM Token",
+        "summary": "註冊 FCM Token（多裝置支援）",
         "tags": ["推播通知"],
         "parameters": [
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "string" } }
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
         ],
         "requestBody": {
           "required": true,
@@ -425,14 +932,85 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": { "fcmToken": { "type": "string" } },
+                "properties": {
+                  "fcmToken": {
+                    "type": "string",
+                    "description": "Firebase Cloud Messaging Token"
+                  },
+                  "platform": {
+                    "type": "string",
+                    "enum": ["web", "ios", "android"],
+                    "default": "web"
+                  }
+                },
                 "required": ["fcmToken"]
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "註冊成功" }
+          "200": {
+            "description": "註冊成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": {
+                      "type": "string",
+                      "example": "Token registered successfully"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "刪除 FCM Token（登出時呼叫）",
+        "tags": ["推播通知"],
+        "parameters": [
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fcmToken": { "type": "string" }
+                },
+                "required": ["fcmToken"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "刪除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": {
+                      "type": "string",
+                      "example": "Token removed successfully"
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -441,7 +1019,12 @@
         "summary": "取得通知設定",
         "tags": ["推播通知"],
         "parameters": [
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "string" } }
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
         ],
         "responses": {
           "200": {
@@ -452,7 +1035,9 @@
                   "type": "object",
                   "properties": {
                     "success": { "type": "boolean" },
-                    "data": { "$ref": "#/components/schemas/NotificationSettings" }
+                    "data": {
+                      "$ref": "#/components/schemas/NotificationSettings"
+                    }
                   }
                 }
               }
@@ -464,11 +1049,20 @@
         "summary": "更新通知設定",
         "tags": ["推播通知"],
         "parameters": [
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "string" } }
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
         ],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationSettings" } } }
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/NotificationSettings" }
+            }
+          }
         },
         "responses": {
           "200": { "description": "更新成功" }
@@ -477,31 +1071,23 @@
     },
     "/api/v1/notifications/send": {
       "post": {
-        "summary": "發送推播通知 (手動觸發)",
+        "summary": "發送推播通知",
+        "description": "支援 userIds 陣列或 groupId 群組廣播",
         "tags": ["推播通知"],
         "parameters": [
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "string" } }
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "userIds": { "type": "array", "items": { "type": "string" } },
-                  "title": { "type": "string" },
-                  "body": { "type": "string" },
-                  "type": { "type": "string", "enum": ["inventory", "group", "shopping", "system"] },
-                  "action": {
-                    "type": "object",
-                    "properties": {
-                      "type": { "type": "string" },
-                      "payload": { "type": "object" }
-                    }
-                  }
-                },
-                "required": ["userIds", "title", "body", "type"]
+                "$ref": "#/components/schemas/SendNotificationRequest"
               }
             }
           }
@@ -519,7 +1105,8 @@
                       "type": "object",
                       "properties": {
                         "sent": { "type": "integer" },
-                        "failed": { "type": "integer" }
+                        "failed": { "type": "integer" },
+                        "details": { "type": "object" }
                       }
                     }
                   }
@@ -534,7 +1121,7 @@
       "post": {
         "summary": "檢查過期食材並發送通知 (Cron Job)",
         "tags": ["排程任務"],
-        "security": [ { "BearerAuth": [] } ],
+        "security": [{ "BearerAuth": [] }],
         "responses": {
           "200": {
             "description": "檢查完成",
@@ -605,38 +1192,234 @@
           }
         }
       },
+      "ImageAnalysisResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": {
+            "$ref": "#/components/schemas/IngredientRecognitionResult"
+          },
+          "timestamp": { "type": "string", "format": "date-time" }
+        }
+      },
+      "MultipleImageAnalysisResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": {
+            "type": "object",
+            "properties": {
+              "originalImageUrl": { "type": "string" },
+              "totalCount": { "type": "integer" },
+              "ingredients": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/IngredientRecognitionResult"
+                }
+              },
+              "analyzedAt": { "type": "string", "format": "date-time" }
+            }
+          },
+          "timestamp": { "type": "string", "format": "date-time" }
+        }
+      },
+      "IngredientRecognitionResult": {
+        "type": "object",
+        "properties": {
+          "productName": { "type": "string" },
+          "category": { "type": "string" },
+          "attributes": { "type": "array", "items": { "type": "string" } },
+          "purchaseQuantity": { "type": "number" },
+          "unit": { "type": "string" },
+          "expiryDate": { "type": "string" },
+          "imageUrl": { "type": "string" }
+        }
+      },
+      "RecipeListResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": {
+            "type": "object",
+            "properties": {
+              "recipes": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/SavedRecipe" }
+              },
+              "pagination": {
+                "type": "object",
+                "properties": {
+                  "total": { "type": "integer" },
+                  "limit": { "type": "integer" },
+                  "offset": { "type": "integer" }
+                }
+              }
+            }
+          }
+        }
+      },
       "SavedRecipe": {
         "type": "object",
         "properties": {
           "id": { "type": "string", "format": "uuid" },
           "userId": { "type": "string" },
-          "title": { "type": "string" },
-          "content": { "type": "object" },
+          "name": { "type": "string" },
+          "ingredients": { "type": "array", "items": { "type": "object" } },
+          "steps": { "type": "array", "items": { "type": "object" } },
+          "isFavorite": { "type": "boolean" },
           "createdAt": { "type": "string", "format": "date-time" }
         }
       },
       "CreateRecipeInput": {
         "type": "object",
-        "required": ["title", "content"],
+        "required": ["name", "ingredients", "steps"],
         "properties": {
-          "title": { "type": "string" },
-          "content": { "type": "object" },
+          "name": { "type": "string" },
+          "ingredients": { "type": "array", "items": { "type": "object" } },
+          "steps": { "type": "array", "items": { "type": "object" } },
           "isFavorite": { "type": "boolean", "default": false }
         }
       },
       "UpdateRecipeInput": {
         "type": "object",
         "properties": {
-          "title": { "type": "string" },
-          "content": { "type": "object" },
+          "name": { "type": "string" },
+          "ingredients": { "type": "array", "items": { "type": "object" } },
+          "steps": { "type": "array", "items": { "type": "object" } },
           "isFavorite": { "type": "boolean" }
+        }
+      },
+      "InventoryListResponse": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "boolean" },
+          "data": {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/InventoryItem" }
+              },
+              "total": { "type": "integer" },
+              "stats": { "type": "object" },
+              "summary": { "type": "object" }
+            }
+          }
+        }
+      },
+      "InventoryItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "category": { "type": "string" },
+          "quantity": { "type": "number" },
+          "unit": { "type": "string" },
+          "expiryDate": { "type": "string", "format": "date" },
+          "purchaseDate": { "type": "string", "format": "date" },
+          "imageUrl": { "type": "string" },
+          "attributes": { "type": "array", "items": { "type": "string" } },
+          "notes": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["fresh", "expiring", "expired"]
+          }
+        }
+      },
+      "CreateInventoryInput": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "category": { "type": "string" },
+          "quantity": { "type": "number", "default": 1 },
+          "unit": { "type": "string", "default": "份" },
+          "expiryDate": { "type": "string", "format": "date" },
+          "purchaseDate": { "type": "string", "format": "date" },
+          "imageUrl": { "type": "string" },
+          "attributes": { "type": "array", "items": { "type": "string" } },
+          "notes": { "type": "string" },
+          "lowStockAlert": { "type": "boolean" },
+          "lowStockThreshold": { "type": "number" }
+        }
+      },
+      "UpdateInventoryInput": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "category": { "type": "string" },
+          "quantity": { "type": "number" },
+          "unit": { "type": "string" },
+          "expiryDate": { "type": "string", "format": "date" },
+          "purchaseDate": { "type": "string", "format": "date" },
+          "imageUrl": { "type": "string" },
+          "attributes": { "type": "array", "items": { "type": "string" } },
+          "notes": { "type": "string" }
+        }
+      },
+      "ConsumeInventoryInput": {
+        "type": "object",
+        "required": ["quantity", "reasons"],
+        "properties": {
+          "quantity": { "type": "number", "minimum": 0.01 },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "label": { "type": "string" },
+                "type": { "type": "string", "enum": ["usage", "discard"] }
+              }
+            }
+          }
+        }
+      },
+      "InventorySettings": {
+        "type": "object",
+        "properties": {
+          "categoryOrder": { "type": "array", "items": { "type": "string" } },
+          "defaultLayout": { "type": "string", "enum": ["grid", "list"] }
+        }
+      },
+      "NotificationListResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/Notification" }
+              },
+              "total": { "type": "integer" },
+              "unreadCount": { "type": "integer" }
+            }
+          },
+          "pagination": {
+            "type": "object",
+            "properties": {
+              "page": { "type": "integer" },
+              "limit": { "type": "integer" },
+              "total": { "type": "integer" }
+            }
+          },
+          "unreadCount": { "type": "integer" }
         }
       },
       "Notification": {
         "type": "object",
         "properties": {
           "id": { "type": "string", "format": "uuid" },
-          "type": { "type": "string", "enum": ["inventory", "group", "shopping", "system"] },
+          "category": {
+            "type": "string",
+            "enum": ["stock", "inspiration", "official"]
+          },
+          "type": {
+            "type": "string",
+            "enum": ["inventory", "group", "shopping", "recipe", "system"]
+          },
           "title": { "type": "string" },
           "message": { "type": "string" },
           "isRead": { "type": "boolean" },
@@ -656,34 +1439,64 @@
           "notifyPush": { "type": "boolean", "description": "總開關" },
           "notifyExpiry": { "type": "boolean", "description": "過期提醒" },
           "notifyLowStock": { "type": "boolean", "description": "低庫存提醒" },
-          "daysBeforeExpiry": { "type": "integer", "description": "過期提醒天數 (預設 3)" },
+          "daysBeforeExpiry": {
+            "type": "integer",
+            "description": "過期提醒天數 (1-30)",
+            "minimum": 1,
+            "maximum": 30
+          },
           "notifyMarketing": { "type": "boolean", "description": "行銷活動" }
         }
       },
-      "IngredientRecognitionResult": {
+      "SendNotificationRequest": {
         "type": "object",
+        "required": ["title", "body", "type"],
         "properties": {
-          "productName": { "type": "string" },
-          "category": { "type": "string" },
-          "attributes": { "type": "string" },
-          "purchaseQuantity": { "type": "number" },
-          "unit": { "type": "string" },
-          "expiryDate": { "type": "string" },
-          "imageUrl": { "type": "string" }
+          "userIds": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "目標使用者 ID 列表"
+          },
+          "groupId": {
+            "type": "string",
+            "description": "或指定群組（冰箱 ID）廣播"
+          },
+          "title": { "type": "string" },
+          "body": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": [
+              "inventory",
+              "group",
+              "shopping",
+              "recipe",
+              "system",
+              "expiry"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": ["stock", "inspiration", "official"]
+          },
+          "action": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "payload": { "type": "object" }
+            }
+          }
         }
-      },
-      "BoundingBox": {
-        "type": "array",
-        "items": { "type": "integer" },
-        "description": "[ymin, xmin, ymax, xmax]",
-        "minItems": 4,
-        "maxItems": 4
       }
     },
     "securitySchemes": {
       "BearerAuth": {
         "type": "http",
         "scheme": "bearer"
+      },
+      "UserIdHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-User-Id"
       }
     }
   }
