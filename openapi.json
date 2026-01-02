@@ -1014,6 +1014,113 @@
         }
       }
     },
+    "/api/v1/notifications/batch-read": {
+      "post": {
+        "summary": "批次標記已讀",
+        "tags": ["推播通知"],
+        "parameters": [
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "通知 ID 列表"
+                  },
+                  "isRead": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "是否標記為已讀"
+                  }
+                },
+                "required": ["ids"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "updatedCount": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/batch-delete": {
+      "post": {
+        "summary": "批次刪除通知",
+        "tags": ["推播通知"],
+        "parameters": [
+          {
+            "name": "X-User-Id",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": { "type": "array", "items": { "type": "string" } }
+                },
+                "required": ["ids"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "刪除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "deletedCount": { "type": "integer" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/notifications/settings": {
       "get": {
         "summary": "取得通知設定",
@@ -1114,6 +1221,59 @@
               }
             }
           }
+        }
+      }
+    },
+    "/api/v1/admin/announcements": {
+      "post": {
+        "summary": "發送官方公告（管理員專用）",
+        "tags": ["推播通知"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnnouncementRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "公告發送成功" }
+        }
+      }
+    },
+    "/api/v1/admin/announcements/release": {
+      "post": {
+        "summary": "版本更新公告（CI/CD 觸發）",
+        "tags": ["推播通知"],
+        "parameters": [
+          {
+            "name": "X-Deploy-Secret",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": { "type": "string", "example": "1.2.0" },
+                  "releaseNotes": { "type": "string" },
+                  "forceUpdate": { "type": "boolean", "default": false }
+                },
+                "required": ["version", "releaseNotes"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "版本公告發送成功" }
         }
       }
     },
@@ -1485,6 +1645,27 @@
               "payload": { "type": "object" }
             }
           }
+        }
+      },
+      "AnnouncementRequest": {
+        "type": "object",
+        "required": ["title", "message"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "🎉 FuFood v1.2.0 更新上線！"
+          },
+          "message": {
+            "type": "string",
+            "example": "新功能：AI 智慧食譜推薦、共享購物清單"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["announcement", "update", "maintenance"],
+            "default": "announcement"
+          },
+          "pushNotification": { "type": "boolean", "default": true },
+          "data": { "type": "object" }
         }
       }
     },
