@@ -22,6 +22,46 @@ const requireUser = (
   next();
 };
 
+// 0. 批次標記已讀
+router.post("/batch-read", requireUser, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { ids, isRead = true } = req.body;
+
+    if (!ids || !Array.isArray(ids)) {
+      return res.status(400).json({ error: "ids array is required" });
+    }
+
+    const result = await notificationService.batchMarkAsRead(
+      userId,
+      ids,
+      isRead
+    );
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// 0.5 批次刪除
+router.post("/batch-delete", requireUser, async (req, res) => {
+  try {
+    const userId = (req as any).userId;
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids)) {
+      return res.status(400).json({ error: "ids array is required" });
+    }
+
+    const result = await notificationService.batchDelete(userId, ids);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 // 1. 註冊 FCM Token（支援多裝置）
 router.post("/token", requireUser, async (req, res) => {
   try {
