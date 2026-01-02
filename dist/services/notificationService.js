@@ -2,17 +2,52 @@ import { messaging } from "../lib/firebase.js";
 import { query } from "../db/index.js";
 export const notificationService = {
     /**
-     * 註冊或更新 FCM Token
+     * 註冊或更新 FCM Token（多裝置支援）
+     * @param userId 使用者 ID
+     * @param token FCM Token
+     * @param platform 平台類型 (web | ios | android)
      */
-    registerToken: async (userId, token) => {
-        // Upsert user to ensure they exist and have the token
-        const sql = `
-      INSERT INTO users (id, fcm_token, created_at)
-      VALUES ($1, $2, NOW())
-      ON CONFLICT (id) 
-      DO UPDATE SET fcm_token = $2;
+    registerToken: async (userId, token, platform = "web") => {
+        // 確保使用者存在
+        const ensureUserSql = `
+      INSERT INTO users (id, created_at) VALUES ($1, NOW()) ON CONFLICT (id) DO NOTHING;
     `;
+        await query(ensureUserSql, [userId]);
+        // Upsert Token 到 fcm_tokens 表
+        // 如果 Token 已存在（可能屬於其他使用者），更新為新使用者
+        const sql = `
+      INSERT INTO fcm_tokens (user_id, token, platform, created_at, updated_at)
+      VALUES ($1, $2, $3, NOW(), NOW())
+      ON CONFLICT (token) 
+      DO UPDATE SET 
+        user_id = $1,
+        platform = $3,
+        updated_at = NOW();
+    `;
+        await query(sql, [userId, token, platform]);
+    },
+    /**
+     * 刪除 FCM Token（登出時呼叫）
+     */
+    removeToken: async (userId, token) => {
+        const sql = `DELETE FROM fcm_tokens WHERE user_id = $1 AND token = $2`;
         await query(sql, [userId, token]);
+    },
+    /**
+     * 取得使用者所有裝置的 FCM Tokens
+     */
+    getUserTokens: async (userId) => {
+        const sql = `SELECT token FROM fcm_tokens WHERE user_id = $1`;
+        const result = await query(sql, [userId]);
+        return result.rows.map((row) => row.token);
+    },
+    /**
+     * 刪除無效的 FCM Token
+     */
+    removeInvalidToken: async (token) => {
+        const sql = `DELETE FROM fcm_tokens WHERE token = $1`;
+        await query(sql, [token]);
+        console.log(`[FCM] Removed invalid token: ${token.substring(0, 20)}...`);
     },
     /**
      * 取得通知設定
@@ -166,13 +201,6 @@ export const notificationService = {
             ]);
             user = newUserResult.rows[0];
         }
-        // 2. 判斷是否需要發送推播
-        let shouldSendPush = user.notify_push && user.fcm_token;
-        // 細部過濾
-        if (type === "inventory" && !user.notify_expiry)
-            shouldSendPush = false;
-        if (type === "marketing" && !user.notify_marketing)
-            shouldSendPush = false;
         // 3. 寫入資料庫 (Notification Center)
         const insertSql = `
       INSERT INTO notifications (user_id, category, type, title, message, action_type, action_payload)
@@ -191,30 +219,44 @@ export const notificationService = {
             actionType,
             actionPayload,
         ]);
-        // 4. 發送 FCM
-        if (shouldSendPush && user.fcm_token) {
-            try {
-                await messaging.send({
-                    token: user.fcm_token,
-                    notification: { title, body },
-                    data: {
-                        type,
-                        actionType: actionType || "",
-                        // actionPayload 通常很大或結構複雜，FCM data 只能扁平 key-value string
-                        // 建議只傳 ID 讓前端去 fetch，這裡依照 plan 傳 actionId
-                        actionId: action?.payload?.id || "",
-                    },
-                });
-                console.log(`[Notification] Push sent to user ${userId}`);
-            }
-            catch (error) {
-                console.error("[Notification] FCM Send Error:", error);
-                // 如果 token 失效，可以考慮 UPDATE users SET fcm_token = NULL WHERE id = ...
-                if (error.code === "messaging/registration-token-not-registered") {
-                    await query(`UPDATE users SET fcm_token = NULL WHERE id = $1`, [
-                        userId,
-                    ]);
+        // 4. 發送 FCM（多裝置支援）
+        // 取得使用者所有裝置的 Token
+        const tokens = await notificationService.getUserTokens(userId);
+        const shouldSendPush = user.notify_push !== false && tokens.length > 0;
+        // 細部過濾
+        let shouldPush = shouldSendPush;
+        if (type === "inventory" && !user.notify_expiry)
+            shouldPush = false;
+        if (type === "marketing" && !user.notify_marketing)
+            shouldPush = false;
+        if (shouldPush && tokens.length > 0) {
+            const failedTokens = [];
+            for (const token of tokens) {
+                try {
+                    await messaging.send({
+                        token,
+                        notification: { title, body },
+                        data: {
+                            type,
+                            actionType: actionType || "",
+                            actionId: action?.payload?.id || "",
+                        },
+                    });
                 }
+                catch (error) {
+                    console.error("[Notification] FCM Send Error:", error);
+                    // 如果 token 失效，從 fcm_tokens 表刪除
+                    if (error.code === "messaging/registration-token-not-registered") {
+                        failedTokens.push(token);
+                    }
+                }
+            }
+            // 批次刪除無效 Token
+            for (const invalidToken of failedTokens) {
+                await notificationService.removeInvalidToken(invalidToken);
+            }
+            if (tokens.length > failedTokens.length) {
+                console.log(`[Notification] Push sent to user ${userId} (${tokens.length - failedTokens.length}/${tokens.length} devices)`);
             }
         }
     },

@@ -15,16 +15,32 @@ const requireUser = (req, res, next) => {
     req.userId = userId;
     next();
 };
-// 1. 註冊 FCM Token
+// 1. 註冊 FCM Token（支援多裝置）
 router.post("/token", requireUser, async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { fcmToken, platform = "web" } = req.body;
+        if (!fcmToken) {
+            return res.status(400).json({ error: "fcmToken is required" });
+        }
+        await notificationService.registerToken(userId, fcmToken, platform);
+        res.json({ success: true, message: "Token registered successfully" });
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+// 1.5 刪除 FCM Token（登出時呼叫）
+router.delete("/token", requireUser, async (req, res) => {
     try {
         const userId = req.userId;
         const { fcmToken } = req.body;
         if (!fcmToken) {
             return res.status(400).json({ error: "fcmToken is required" });
         }
-        await notificationService.registerToken(userId, fcmToken);
-        res.json({ success: true, message: "Token registered" });
+        await notificationService.removeToken(userId, fcmToken);
+        res.json({ success: true, message: "Token removed successfully" });
     }
     catch (error) {
         console.error(error);
