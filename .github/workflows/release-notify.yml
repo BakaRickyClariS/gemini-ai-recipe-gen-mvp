@@ -1,0 +1,21 @@
+name: Auto Release Announcement
+
+on:
+  push:
+    branches:
+      - main # 當代碼推送到 main 分支時觸發
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Release Notification to Backend
+        run: |
+          curl -X POST "https://gemini-ai-recipe-gen-mvp.vercel.app/api/v1/admin/announcements/release" \
+          -H "Content-Type: application/json" \
+          -H "X-Deploy-Secret: ${{ secrets.DEPLOY_SECRET }}" \
+          -d '{
+            "version": "${{ github.sha }}",
+            "releaseNotes": "🚀 自動部署更新：${{ github.event.head_commit.message }}",
+            "forceUpdate": false
+          }'
