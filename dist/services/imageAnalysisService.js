@@ -55,6 +55,54 @@ function parseJsonFromText(text) {
     const sliced = start !== -1 && end !== -1 && end > start ? raw.slice(start, end + 1) : raw;
     return JSON.parse(sliced);
 }
+// ===== 過期日期推算邏輯 =====
+const EXPIRY_DAYS_BY_CATEGORY = {
+    乳製品飲料類: 10,
+    蔬果類: 7,
+    肉蛋類: 3,
+    海鮮類: 3,
+    調味料類: 180,
+    加工食品類: 120,
+    冷凍食品類: 90,
+    其他: 7,
+};
+function validateAndAdjustExpiryDate(result) {
+    const today = new Date();
+    const purchaseDate = new Date(); // 假設購買日為今日
+    if (!result.expiryDate) {
+        // 若無過期日，使用預設值
+        const days = EXPIRY_DAYS_BY_CATEGORY[result.category] || 7;
+        const expiry = new Date(purchaseDate);
+        expiry.setDate(expiry.getDate() + days);
+        result.expiryDate = expiry.toISOString().split("T")[0];
+        return result;
+    }
+    const expiry = new Date(result.expiryDate);
+    const purchase = new Date(result.purchaseDate || purchaseDate.toISOString().split("T")[0]);
+    // 1. 格式無效或日期無效
+    if (isNaN(expiry.getTime())) {
+        const days = EXPIRY_DAYS_BY_CATEGORY[result.category] || 7;
+        const newExpiry = new Date(purchase);
+        newExpiry.setDate(newExpiry.getDate() + days);
+        result.expiryDate = newExpiry.toISOString().split("T")[0];
+        return result;
+    }
+    // 2. 合理性檢查：過期日早於購買日 -> 修正為預設天數
+    if (expiry < purchase) {
+        const days = EXPIRY_DAYS_BY_CATEGORY[result.category] || 7;
+        const newExpiry = new Date(purchase);
+        newExpiry.setDate(newExpiry.getDate() + days);
+        result.expiryDate = newExpiry.toISOString().split("T")[0];
+        // console.warn(`[AI Image] Expiry date adjusted for ${result.productName}`);
+    }
+    // 3. 合理性檢查：超過 2 年 -> 修正為 2 年
+    const twoYearsLater = new Date(purchase);
+    twoYearsLater.setFullYear(twoYearsLater.getFullYear() + 2);
+    if (expiry > twoYearsLater) {
+        result.expiryDate = twoYearsLater.toISOString().split("T")[0];
+    }
+    return result;
+}
 // ===== 主要影像分析 API =====
 /**
  * 透過 URL 分析圖片中的食材
@@ -89,15 +137,9 @@ export const analyzeImageByUrl = async (imageUrl) => {
   "unit": string,                   // 【必填】單位（例如：「瓶」、「顆」、「盒」、「包」、「公斤」、「份」），若無法判斷請填「份」
   "purchaseDate": string,           // 【必填】購買日期，使用今天的日期，格式：YYYY-MM-DD
   "expiryDate": string,             // 【必填】預計過期日期（格式：YYYY-MM-DD，絕對不能為空值）
-                                     //   - 若圖片中有標示有效期限，請使用該日期
-                                     //   - 若無法辨識，請根據食材類型推估：
-                                     //     * 新鮮蔬果類：今日 + 5天
-                                     //     * 乳製品類：今日 + 10天
-                                     //     * 生鮮肉類/海鮮：今日 + 3天
-                                     //     * 蛋類：今日 + 14天
-                                     //     * 加工食品/罐頭：今日 + 60天
-                                     //     * 冷凍食品：今日 + 90天
-                                     //     * 其他：今日 + 7天
+                                     //   - 若圖片中有標示有效期限，請優先使用該日期
+                                     //   - 若無標示，請自行根據食材種類與狀態（如新鮮、冷凍）推算合理的過期日
+                                     //   - 若完全無法判斷，請回傳空字串，系統將自動帶入預設值
   "lowStockAlert": boolean,         // 【必填】是否開啟低庫存提醒，若無法判斷請填 true
   "lowStockThreshold": number,      // 【必填】低庫存數量通知門檻，若無法判斷請填 2
   "notes": string                   // 【必填】備註（例如：「新鮮度佳」、「請盡快食用」、「冷藏保存」），若無特別備註請填「無」
@@ -124,7 +166,8 @@ export const analyzeImageByUrl = async (imageUrl) => {
     const text = result.response.text().trim();
     const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/i);
     const jsonText = jsonMatch ? jsonMatch[1] : text;
-    return parseJsonFromText(jsonText);
+    const parsed = parseJsonFromText(jsonText);
+    return validateAndAdjustExpiryDate(parsed);
 };
 /**
  * 分析本地圖片檔案中的食材
@@ -153,15 +196,9 @@ export const analyzeLocalImage = async (filePath) => {
   "unit": string,                   // 【必填】單位（例如：「瓶」、「顆」、「盒」、「包」、「公斤」、「份」），若無法判斷請填「份」
   "purchaseDate": string,           // 【必填】購買日期，使用今天的日期，格式：YYYY-MM-DD
   "expiryDate": string,             // 【必填】預計過期日期（格式：YYYY-MM-DD，絕對不能為空值）
-                                     //   - 若圖片中有標示有效期限，請使用該日期
-                                     //   - 若無法辨識，請根據食材類型推估：
-                                     //     * 新鮮蔬果類：今日 + 5天
-                                     //     * 乳製品類：今日 + 10天
-                                     //     * 生鮮肉類/海鮮：今日 + 3天
-                                     //     * 蛋類：今日 + 14天
-                                     //     * 加工食品/罐頭：今日 + 60天
-                                     //     * 冷凍食品：今日 + 90天
-                                     //     * 其他：今日 + 7天
+                                     //   - 若圖片中有標示有效期限，請優先使用該日期
+                                     //   - 若無標示，請自行根據食材種類與狀態（如新鮮、冷凍）推算合理的過期日
+                                     //   - 若完全無法判斷，請回傳空字串，系統將自動帶入預設值
   "lowStockAlert": boolean,         // 【必填】是否開啟低庫存提醒，若無法判斷請填 true
   "lowStockThreshold": number,      // 【必填】低庫存數量通知門檻，若無法判斷請填 2
   "notes": string                   // 【必填】備註（例如：「新鮮度佳」、「請盡快食用」、「冷藏保存」），若無特別備註請填「無」
@@ -188,5 +225,6 @@ export const analyzeLocalImage = async (filePath) => {
     const text = result.response.text().trim();
     const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/i);
     const jsonText = jsonMatch ? jsonMatch[1] : text;
-    return parseJsonFromText(jsonText);
+    const parsed = parseJsonFromText(jsonText);
+    return validateAndAdjustExpiryDate(parsed);
 };
