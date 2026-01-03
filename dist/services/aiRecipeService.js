@@ -11,7 +11,9 @@ import { validateAIInput } from "../middleware/aiSecurity.js";
 import { validatePromptContent } from "../middleware/promptValidator.js";
 import { filterRecipe, filterGreeting } from "./outputFilter.js";
 // ===== 常數定義 =====
-const AI_DAILY_LIMIT = Number(process.env.AI_DAILY_LIMIT) || 3;
+const AI_DAILY_LIMIT = process.env.AI_DAILY_LIMIT !== undefined
+    ? Number(process.env.AI_DAILY_LIMIT)
+    : 3;
 const AI_REQUEST_TIMEOUT = Number(process.env.AI_REQUEST_TIMEOUT) || 30000;
 // 簡易的每日查詢次數追蹤（生產環境應使用 Redis 或資料庫）
 const userQueryCount = new Map();
@@ -19,6 +21,10 @@ function getTodayDate() {
     return new Date().toISOString().split("T")[0];
 }
 function checkAndUpdateQueryLimit(userId) {
+    // 如果設定為 0 或 -1，視為無限（測試開發用）
+    if (AI_DAILY_LIMIT <= 0) {
+        return 999;
+    }
     const today = getTodayDate();
     const userRecord = userQueryCount.get(userId);
     if (!userRecord || userRecord.date !== today) {
@@ -159,6 +165,14 @@ function parseJsonFromText(text) {
     console.log("[AI Recipe] Sliced content for parsing:", sliced);
     try {
         const parsed = JSON.parse(sliced);
+        // 如果 AI 回傳的是安全規則攔截的結構 {"error": "..."}
+        if (parsed.error && !parsed.recipes) {
+            console.log("[AI Recipe] Security rejection detected in JSON content.");
+            return {
+                greeting: parsed.error,
+                recipes: [],
+            };
+        }
         console.log("[AI Recipe] JSON parsed successfully. Recipes count:", parsed.recipes?.length || 0);
         return parsed;
     }
@@ -220,7 +234,12 @@ export async function generateMultipleRecipes(request, userId = "anonymous") {
             const text = result.response.text().trim();
             const parsed = parseJsonFromText(text);
             // 如果解析結果為空（包含了錯誤訊息），則拋出錯誤以觸發重試
+            // 但如果已經有 greeting (可能是安全拒絕)，就不重試直接回傳
             if (parsed.recipes.length === 0) {
+                if (parsed.greeting &&
+                    (parsed.greeting.includes("抱歉") || parsed.greeting.includes("拒絕"))) {
+                    return parsed;
+                }
                 throw new Error("AI generation incomplete or malformed JSON");
             }
             return parsed;
