@@ -105,7 +105,7 @@ router.get("/", requireUser, async (req, res) => {
 router.post("/send", requireUser, async (req, res) => {
     try {
         console.log("[Notification] Incoming request /send:", req.body);
-        const { userIds, groupId, title, body, type, action, category } = req.body;
+        const { userIds, groupId, title, body, type, action, category, subType, groupName, actorName } = req.body;
         // 驗證必要欄位
         if (!title || !body || !type) {
             return res
@@ -116,8 +116,10 @@ router.post("/send", requireUser, async (req, res) => {
         if (groupId) {
             console.log(`[Notification] Using groupId broadcast mode: ${groupId}`);
             const operatorId = req.userId; // 從 header 拿到的當前使用者
+            // 如果 groupName 前端沒有傳，service 內部會嘗試去查，但若前端有傳就直接用
+            // actorName 也可以由前端傳入 (例如 "Ricky")，若沒傳則為 null
             await notificationService.sendToRefrigeratorMembers(groupId, title, body, type, action, category, // 這裡如果不傳，send 會走自動映射
-            operatorId);
+            operatorId, subType, actorName, groupName);
             return res.json({
                 success: true,
                 message: `Broadcast to group ${groupId} initiated`,
@@ -129,7 +131,7 @@ router.post("/send", requireUser, async (req, res) => {
                 .status(400)
                 .json({ error: "Either groupId or userIds array is required" });
         }
-        const results = await notificationService.sendToMultiple(userIds, title, body, type, action);
+        const results = await notificationService.sendToMultiple(userIds, title, body, type, action, subType, groupName, actorName);
         res.json({
             success: true,
             data: {
