@@ -48,11 +48,21 @@ export type InventoryItem = {
   updatedAt?: string;
 };
 
+// ===== 通知選項 =====
+export type InventoryNotificationOptions = {
+  title?: string;
+  body?: string;
+  groupName?: string;
+  actorName?: string;
+};
+
 // ===== 新增食材請求 =====
 export type CreateInventoryInput = Omit<
   InventoryItem,
   "id" | "userId" | "refrigeratorId" | "createdAt" | "updatedAt"
->;
+> & {
+  notification?: InventoryNotificationOptions;
+};
 
 // ===== 更新食材請求 =====
 export type UpdateInventoryInput = Partial<CreateInventoryInput>;
@@ -62,6 +72,7 @@ export type ConsumeInventoryInput = {
   quantity: number;
   reasons: ConsumptionReason[];
   customReason?: string;
+  notification?: InventoryNotificationOptions;
 };
 
 // ===== 庫存統計 =====
