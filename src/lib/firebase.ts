@@ -9,9 +9,14 @@ const require = createRequire(import.meta.url);
 let serviceAccount: any;
 
 // 1. 優先嘗試從環境變數讀取 (適用於 Vercel)
-if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+// 支援兩種常見命名：FIREBASE_SERVICE_ACCOUNT 或 FIREBASE_SERVICE_ACCOUNT_KEY
+const envServiceAccount =
+  process.env.FIREBASE_SERVICE_ACCOUNT ||
+  process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+
+if (envServiceAccount) {
   try {
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    serviceAccount = JSON.parse(envServiceAccount);
     console.log(
       "✅ [Firebase] Loaded service account from environment variable"
     );
@@ -51,7 +56,7 @@ export const messaging = admin.apps.length
       // Mock implementation if init failed to prevent crash
       send: async () => {
         console.warn(
-          "⚠️ [Firebase] Mock send called because initialization failed."
+          "⚠️ [Firebase] Mock send called because initialization failed. Check your FIREBASE_SERVICE_ACCOUNT_KEY."
         );
         return "mock-id";
       },

@@ -462,4 +462,137 @@ export const notificationService = {
       }
     }
   },
+
+  /**
+   * 批次標記已讀
+   * @param userId 使用者 ID
+   * @param ids 通知 ID 列表
+   * @param isRead 是否已讀 (預設 true)
+   */
+  batchMarkAsRead: async (
+    userId: string,
+    ids: string[],
+    isRead: boolean = true
+  ) => {
+    if (ids.length === 0) return { updatedCount: 0 };
+
+    const sql = `
+      UPDATE notifications
+      SET is_read = $2, updated_at = NOW()
+      WHERE user_id = $1 AND id = ANY($3::uuid[])
+    `;
+    const result = await query(sql, [userId, isRead, ids]);
+    return { updatedCount: result.rowCount };
+  },
+
+  /**
+   * 批次刪除通知
+   * @param userId 使用者 ID
+   * @param ids 通知 ID 列表
+   */
+  batchDelete: async (userId: string, ids: string[]) => {
+    if (ids.length === 0) return { deletedCount: 0 };
+
+    const sql = `
+      DELETE FROM notifications
+      WHERE user_id = $1 AND id = ANY($2::uuid[])
+    `;
+    const result = await query(sql, [userId, ids]);
+    return { deletedCount: result.rowCount };
+  },
+
+  /**
+   * 發送官方公告（廣播給所有使用者）
+   */
+  sendAnnouncement: async (
+    title: string,
+    message: string,
+    type: string = "announcement",
+    shouldPush: boolean = true,
+    data: any = {}
+  ) => {
+    // 1. 取得所有有效使用者 (有 FCM Token 或最近有活動的可以用來過濾，這裡先簡單全部)
+    // 為了效能，我們直接從 users 表撈 ID
+    const userResult = await query(`SELECT id, notify_push FROM users`);
+    const users = userResult.rows;
+
+    console.log(`[Announcement] Preparing to send to ${users.length} users...`);
+
+    // 2. 批次寫入 notifications (使用 unnest 或 loop，考慮到數量可能很大，這裡用簡單的 loop 或 batch insert)
+    // 為了避免 SQL 參數過多 (Postgres limit ~65535 parameters)，量大時需分批
+    // 這裡做一個簡單的優化：使用 INSERT INTO ... SELECT ... 雖然 notifications 有 user_id FK，
+    // 但可以結合 users table 做。不過 notifications ID 是 UUID，需要個別產生。
+    // 簡單解法：使用 Loop, for MVP is okay. 若使用者 > 1000 建議改用 Bulk Insert。
+
+    // 這裡改用較高效的寫法：
+    // INSERT INTO notifications (user_id, ...) SELECT id, ... FROM users
+    // 這樣資料庫層級完成，極快。
+
+    const category = "official";
+    const actionType =
+      type === "release" ? "release_note" : "announcement_detail";
+    const actionPayload = JSON.stringify(data);
+
+    const insertSql = `
+      INSERT INTO notifications (user_id, category, type, title, message, action_type, action_payload, created_at, updated_at)
+      SELECT id, $1, $2, $3, $4, $5, $6, NOW(), NOW()
+      FROM users
+    `;
+
+    const insertResult = await query(insertSql, [
+      category,
+      type,
+      title,
+      message,
+      actionType,
+      actionPayload,
+    ]);
+
+    console.log(
+      `[Announcement] DB inserted ${insertResult.rowCount} notifications.`
+    );
+
+    // 3. 處理推送 (Topic Messaging or Batch Multicast)
+    // FCM 最佳解是使用 Topic ('all_users')，但如果之前沒訂閱 Topic，現在發會沒人收到。
+    // 所以這裡還是必須用 Token Multicast。
+    if (shouldPush) {
+      // 取得所有 Token (這可能會很多，建議分批)
+      // 假設 MVP 人數不多，一次撈出
+      const tokenResult = await query(`SELECT token FROM fcm_tokens`);
+      const allTokens = tokenResult.rows.map((r) => r.token);
+
+      if (allTokens.length > 0) {
+        console.log(
+          `[Announcement] Broadcasting FCM to ${allTokens.length} devices.`
+        );
+
+        // FCM multicast limit is 500 per batch
+        const batchSize = 500;
+        for (let i = 0; i < allTokens.length; i += batchSize) {
+          const batchTokens = allTokens.slice(i, i + batchSize);
+          try {
+            await messaging.sendEachForMulticast({
+              tokens: batchTokens,
+              notification: { title, body: message },
+              data: {
+                type,
+                actionType,
+                category,
+              },
+            });
+            console.log(
+              `[Announcement] Batch ${Math.floor(i / batchSize) + 1} sent.`
+            );
+          } catch (err) {
+            console.error(`[Announcement] Batch send error:`, err);
+          }
+        }
+      }
+    }
+
+    return {
+      recipientCount: users.length,
+      notificationCount: insertResult.rowCount,
+    };
+  },
 };

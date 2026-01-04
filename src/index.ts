@@ -109,6 +109,7 @@ app.use("/api/v1/recipes", recipeRoutes);
 import notificationRoutes from "./routes/notificationRoutes.js";
 import cronRoutes from "./routes/cronRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
 
 // ===== Auth API (Session Sync) =====
 app.use("/api/v1/auth", authRoutes);
@@ -120,6 +121,9 @@ app.use("/api/v1/refrigerators/:refrigeratorId/inventory", inventoryRoutes);
 
 // ===== 推播通知 API =====
 app.use("/api/v1/notifications", notificationRoutes);
+
+// ===== 管理員 API =====
+app.use("/api/v1/admin", adminRoutes);
 
 // ===== Cron Job API =====
 app.use("/api/cron", cronRoutes);
