@@ -27,17 +27,14 @@ async function listTables() {
       console.log(columns.rows);
     }
 
-    // Check for user-refrigerator link table
-    const linkTable = result.rows.find(
-      (r) =>
-        r.table_name.includes("user") && r.table_name.includes("refrigerator")
-    );
-    if (linkTable) {
-      console.log(`\nColumns for ${linkTable.table_name}:`);
+    // Check for inventory_settings table
+    const settingsTable = result.rows.find((r) => r.table_name === "inventory_settings");
+    if (settingsTable) {
+      console.log(`\nColumns for ${settingsTable.table_name}:`);
       const columns = await query(`
             SELECT column_name, data_type 
             FROM information_schema.columns 
-            WHERE table_name = '${linkTable.table_name}'
+            WHERE table_name = '${settingsTable.table_name}'
         `);
       console.log(columns.rows);
     }
@@ -54,9 +51,21 @@ async function listTables() {
         `);
       console.log(columns.rows);
     }
+    // Check for users table
+    const usersTable = result.rows.find((r) => r.table_name === "users");
+    if (usersTable) {
+      console.log(`\nColumns for ${usersTable.table_name}:`);
+      const columns = await query(`
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = '${usersTable.table_name}'
+        `);
+      console.log(columns.rows);
+    }
   } catch (err) {
     console.error(err);
   } finally {
+
     if (pool) await pool.end();
   }
 }

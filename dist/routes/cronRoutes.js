@@ -68,7 +68,10 @@ router.post("/check-expiry", validateCronSecret, async (_req, res) => {
             // 使用 sendToRefrigeratorMembers 廣播給該冰箱所有成員
             await notificationService.sendToRefrigeratorMembers(fridgeId, "食材即將過期提醒", `${itemNames}${moreCount} 即將過期，請儘快使用！`, "inventory", // type
             { type: "inventory", payload: { refrigeratorId: fridgeId } }, // action
-            "stock" // category
+            "stock", // category
+            undefined, // operatorId
+            "stock", // subType
+            "System" // actorName
             );
             notificationsSent++; // 這裡計數的是「發送的冰箱數」，而非「總通數」
         }

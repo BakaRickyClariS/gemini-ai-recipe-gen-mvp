@@ -3,13 +3,14 @@
  * 處理 AI 後端的 Session 同步與登出
  */
 import { Router } from "express";
+import { query } from "../db/index.js";
 const router = Router();
 /**
  * POST /auth/sync-session
  * 前端登入後將 Token 同步給 AI 後端，設定 HttpOnly Cookie
  */
-router.post("/sync-session", (req, res) => {
-    const { token, userId } = req.body;
+router.post("/sync-session", async (req, res) => {
+    const { token, userId, displayName } = req.body;
     if (!token) {
         return res.status(400).json({ success: false, error: "Token is required" });
     }
@@ -32,6 +33,20 @@ router.post("/sync-session", (req, res) => {
             path: "/",
             maxAge,
         });
+        // [NEW] 如果有傳入 displayName，嘗試更新使用者名稱
+        // 在此也確保使用者存在
+        if (displayName) {
+            try {
+                await query(`INSERT INTO users (id, display_name, created_at)
+            VALUES ($1, $2, NOW())
+            ON CONFLICT (id) 
+            DO UPDATE SET display_name = EXCLUDED.display_name;`, [userId, displayName]);
+                console.log(`[Auth] User ${userId} name updated to ${displayName}`);
+            }
+            catch (e) {
+                console.error(`[Auth] Failed to update user name for ${userId}`, e);
+            }
+        }
     }
     console.log(`[Auth] Session synced for user: ${userId || "unknown"}`);
     res.json({ success: true, message: "Session synced successfully" });

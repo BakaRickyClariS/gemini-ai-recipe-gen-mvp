@@ -430,6 +430,17 @@ export const getInventorySettings = async (userId, refrigeratorId) => {
         true, // notifyOnExpiry
         true, // notifyOnLowStock
     ]);
+    // [NEW] 確保 refrigerators 表中有資料 (Solution A)
+    if (refrigeratorId) {
+        try {
+            await query(`INSERT INTO refrigerators (id, name, created_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (id) DO NOTHING`, [refrigeratorId, "我的冰箱"]);
+        }
+        catch (e) {
+            console.warn(`[Inventory] Failed to ensure refrigerator ${refrigeratorId}`, e);
+        }
+    }
     return rowToSettings(insertResult.rows[0]);
 };
 /**

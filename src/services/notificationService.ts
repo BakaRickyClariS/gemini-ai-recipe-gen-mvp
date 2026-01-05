@@ -172,19 +172,25 @@ export const notificationService = {
 
     // 查詢分頁資料
     let sql = `
-      SELECT id, category, type, title, message, is_read, action_type, action_payload, created_at
-      FROM notifications
-      WHERE user_id = $1
+      SELECT 
+        n.id, n.category, n.type, n.sub_type, n.title, n.message, n.is_read, n.action_type, n.action_payload, n.created_at,
+        n.actor_id,
+        COALESCE(n.group_name, r.name) as group_name,
+        COALESCE(n.actor_name, u.display_name) as actor_name
+      FROM notifications n
+      LEFT JOIN refrigerators r ON (n.action_payload::json->>'refrigeratorId') = r.id::text
+      LEFT JOIN users u ON (n.action_payload::json->>'actorId') = u.id OR (n.action_payload::json->>'operatorId') = u.id
+      WHERE n.user_id = $1
     `;
     let params: any[] = [userId];
     let paramIndex = 2;
 
     if (category) {
-      sql += ` AND category = $${paramIndex++}`;
+      sql += ` AND n.category = $${paramIndex++}`;
       params.push(category);
     }
 
-    sql += ` ORDER BY created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
+    sql += ` ORDER BY n.created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
     params.push(limit, offset);
 
     const result = await query(sql, params);
@@ -194,6 +200,7 @@ export const notificationService = {
       id: row.id,
       category: row.category || "system",
       type: row.type,
+      subType: row.sub_type,
       title: row.title,
       message: row.message,
       isRead: row.is_read,
@@ -202,6 +209,9 @@ export const notificationService = {
         payload: row.action_payload,
       },
       createdAt: row.created_at,
+      groupName: row.group_name,
+      actorName: row.actor_name,
+      actorId: row.actor_id,
     }));
 
     return { notifications, total, unreadCount };
@@ -219,7 +229,11 @@ export const notificationService = {
     body: string,
     type: string,
     action?: any,
-    category?: string
+    category?: string,
+    subType?: string,
+    groupName?: string,
+    actorName?: string,
+    actorId?: string
   ) => {
     // 1. 自動映射分類 (Mapping logic based on extension spec)
     let finalCategory = category;
@@ -253,8 +267,8 @@ export const notificationService = {
 
     // 3. 寫入資料庫 (Notification Center)
     const insertSql = `
-      INSERT INTO notifications (user_id, category, type, title, message, action_type, action_payload)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO notifications (user_id, category, type, title, message, action_type, action_payload, sub_type, group_name, actor_name, actor_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     `;
     const actionType = action?.type || null;
     const actionPayload = action?.payload
@@ -269,6 +283,10 @@ export const notificationService = {
       body,
       actionType,
       actionPayload,
+      subType || null,
+      groupName || null,
+      actorName || null,
+      actorId || "system",
     ]);
 
     // 4. 發送 FCM（多裝置支援）
@@ -346,7 +364,11 @@ export const notificationService = {
     title: string,
     body: string,
     type: string,
-    action?: { type?: string; payload?: any }
+    action?: { type?: string; payload?: any },
+    subType?: string,
+    groupName?: string,
+    actorName?: string,
+    actorId?: string
   ) => {
     const results = {
       success: [] as string[],
@@ -355,7 +377,7 @@ export const notificationService = {
 
     for (const userId of userIds) {
       try {
-        await notificationService.send(userId, title, body, type, action);
+        await notificationService.send(userId, title, body, type, action, undefined, subType, groupName, actorName, actorId);
         results.success.push(userId);
       } catch (error) {
         console.error(`[Notification] Failed to send to ${userId}:`, error);
@@ -376,7 +398,10 @@ export const notificationService = {
     type: string,
     action?: { type?: string; payload?: any },
     category: string = "stock",
-    operatorId?: string
+    operatorId?: string,
+    subType?: string,
+    actorName?: string,
+    passedGroupName?: string // [NEW] Allow caller to pass groupName
   ) => {
     // 1. 找出該冰箱的所有成員
     // 我們假設 inventory_settings 有所有成員的設定資料
@@ -386,6 +411,21 @@ export const notificationService = {
     );
 
     let memberIds = membersResult.rows.map((row) => row.user_id);
+
+    // 1.1 決定群組名稱
+    // 若 caller 有傳則用傳的，否則嘗試查詢 DB
+    let groupName: string | undefined = passedGroupName;
+    
+    if (!groupName) {
+      try {
+          const fridgeResult = await query(`SELECT name FROM refrigerators WHERE id = $1`, [refrigeratorId]);
+          if (fridgeResult.rows.length > 0) {
+              groupName = fridgeResult.rows[0].name;
+          }
+      } catch (e) {
+          console.warn(`[Notification] Failed to fetch group name for ${refrigeratorId}`, e);
+      }
+    }
 
     // 確保操作者自己一定會收到（如果他不在設定名單中）
     if (operatorId && !memberIds.includes(operatorId)) {
@@ -414,7 +454,11 @@ export const notificationService = {
           body,
           type,
           action,
-          category
+          category,
+          subType,
+          groupName,
+          actorName,
+          operatorId || "system"
         );
       } catch (error) {
         console.error(
