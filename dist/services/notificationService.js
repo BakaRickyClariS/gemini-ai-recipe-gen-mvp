@@ -136,6 +136,7 @@ export const notificationService = {
         let sql = `
       SELECT 
         n.id, n.category, n.type, n.sub_type, n.title, n.message, n.is_read, n.action_type, n.action_payload, n.created_at,
+        n.actor_id,
         COALESCE(n.group_name, r.name) as group_name,
         COALESCE(n.actor_name, u.display_name) as actor_name
       FROM notifications n
@@ -168,6 +169,7 @@ export const notificationService = {
             createdAt: row.created_at,
             groupName: row.group_name,
             actorName: row.actor_name,
+            actorId: row.actor_id,
         }));
         return { notifications, total, unreadCount };
     },
@@ -177,7 +179,7 @@ export const notificationService = {
     /**
      * 發送通知核心邏輯
      */
-    send: async (userId, title, body, type, action, category, subType, groupName, actorName) => {
+    send: async (userId, title, body, type, action, category, subType, groupName, actorName, actorId) => {
         // 1. 自動映射分類 (Mapping logic based on extension spec)
         let finalCategory = category;
         if (!finalCategory) {
@@ -211,8 +213,8 @@ export const notificationService = {
         }
         // 3. 寫入資料庫 (Notification Center)
         const insertSql = `
-      INSERT INTO notifications (user_id, category, type, title, message, action_type, action_payload, sub_type, group_name, actor_name)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      INSERT INTO notifications (user_id, category, type, title, message, action_type, action_payload, sub_type, group_name, actor_name, actor_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     `;
         const actionType = action?.type || null;
         const actionPayload = action?.payload
@@ -229,6 +231,7 @@ export const notificationService = {
             subType || null,
             groupName || null,
             actorName || null,
+            actorId || "system",
         ]);
         // 4. 發送 FCM（多裝置支援）
         // 取得使用者所有裝置的 Token
@@ -280,14 +283,14 @@ export const notificationService = {
     /**
      * 發送通知給多個使用者（供前端呼叫）
      */
-    sendToMultiple: async (userIds, title, body, type, action, subType, groupName, actorName) => {
+    sendToMultiple: async (userIds, title, body, type, action, subType, groupName, actorName, actorId) => {
         const results = {
             success: [],
             failed: [],
         };
         for (const userId of userIds) {
             try {
-                await notificationService.send(userId, title, body, type, action, undefined, subType, groupName, actorName);
+                await notificationService.send(userId, title, body, type, action, undefined, subType, groupName, actorName, actorId);
                 results.success.push(userId);
             }
             catch (error) {
@@ -333,7 +336,7 @@ export const notificationService = {
         // 2. 逐一發送
         for (const memberId of memberIds) {
             try {
-                await notificationService.send(memberId, title, body, type, action, category, subType, groupName, actorName);
+                await notificationService.send(memberId, title, body, type, action, category, subType, groupName, actorName, operatorId || "system");
             }
             catch (error) {
                 console.error(`[Notification] Failed to send group notification to ${memberId}:`, error);
