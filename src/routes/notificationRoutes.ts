@@ -205,6 +205,7 @@ router.post("/send", requireUser, async (req, res) => {
         .json({ error: "Either groupId or userIds array is required" });
     }
 
+    const operatorId = (req as any).userId; // 從 header 拿到的當前使用者作為 actorId
     const results = await notificationService.sendToMultiple(
       userIds,
       title,
@@ -213,7 +214,8 @@ router.post("/send", requireUser, async (req, res) => {
       action,
       subType,
       groupName,
-      actorName
+      actorName,
+      operatorId
     );
 
     res.json({

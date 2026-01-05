@@ -49,6 +49,7 @@ export interface NotificationMessage {
   createdAt: string; // ISO 8601
   groupName?: string;
   actorName?: string;
+  actorId?: string;  // 觸發通知的使用者 ID，用於前端去重複
   action: {
     type?: NotificationActionType | string; // 允許 string 以相容舊資料
     payload?: NotificationActionPayload;

@@ -174,6 +174,7 @@ export const notificationService = {
     let sql = `
       SELECT 
         n.id, n.category, n.type, n.sub_type, n.title, n.message, n.is_read, n.action_type, n.action_payload, n.created_at,
+        n.actor_id,
         COALESCE(n.group_name, r.name) as group_name,
         COALESCE(n.actor_name, u.display_name) as actor_name
       FROM notifications n
@@ -210,6 +211,7 @@ export const notificationService = {
       createdAt: row.created_at,
       groupName: row.group_name,
       actorName: row.actor_name,
+      actorId: row.actor_id,
     }));
 
     return { notifications, total, unreadCount };
@@ -230,7 +232,8 @@ export const notificationService = {
     category?: string,
     subType?: string,
     groupName?: string,
-    actorName?: string
+    actorName?: string,
+    actorId?: string
   ) => {
     // 1. 自動映射分類 (Mapping logic based on extension spec)
     let finalCategory = category;
@@ -264,8 +267,8 @@ export const notificationService = {
 
     // 3. 寫入資料庫 (Notification Center)
     const insertSql = `
-      INSERT INTO notifications (user_id, category, type, title, message, action_type, action_payload, sub_type, group_name, actor_name)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      INSERT INTO notifications (user_id, category, type, title, message, action_type, action_payload, sub_type, group_name, actor_name, actor_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     `;
     const actionType = action?.type || null;
     const actionPayload = action?.payload
@@ -283,6 +286,7 @@ export const notificationService = {
       subType || null,
       groupName || null,
       actorName || null,
+      actorId || "system",
     ]);
 
     // 4. 發送 FCM（多裝置支援）
@@ -363,7 +367,8 @@ export const notificationService = {
     action?: { type?: string; payload?: any },
     subType?: string,
     groupName?: string,
-    actorName?: string
+    actorName?: string,
+    actorId?: string
   ) => {
     const results = {
       success: [] as string[],
@@ -372,7 +377,7 @@ export const notificationService = {
 
     for (const userId of userIds) {
       try {
-        await notificationService.send(userId, title, body, type, action, undefined, subType, groupName, actorName);
+        await notificationService.send(userId, title, body, type, action, undefined, subType, groupName, actorName, actorId);
         results.success.push(userId);
       } catch (error) {
         console.error(`[Notification] Failed to send to ${userId}:`, error);
@@ -452,7 +457,8 @@ export const notificationService = {
           category,
           subType,
           groupName,
-          actorName
+          actorName,
+          operatorId || "system"
         );
       } catch (error) {
         console.error(
