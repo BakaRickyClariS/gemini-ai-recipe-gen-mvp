@@ -4,7 +4,6 @@
  */
 import { Router } from "express";
 import * as inventoryService from "../services/inventoryService.js";
-import { notificationService } from "../services/notificationService.js";
 const router = Router({ mergeParams: true });
 // ===== Helper: 取得 userId 和 refrigeratorId =====
 const getUserId = (req) => {
@@ -173,21 +172,26 @@ router.post("/", async (req, res) => {
         }
         const item = await inventoryService.createInventoryItem(userId, refrigeratorId, input);
         // 觸發通知
-        // 觸發通知
-        try {
-            const notif = input.notification || {};
-            const title = notif.title || "入庫成功";
-            const body = notif.body || `已成功新增食材：${item.name}`;
-            await notificationService.sendToRefrigeratorMembers(refrigeratorId, title, body, "stock", { type: "inventory", payload: { itemId: item.id } }, "stock", // category
-            userId, // operatorId
-            "stockIn", // subType
-            notif.actorName, // from frontend or undefined
-            notif.groupName // from frontend or undefined
-            );
-        }
-        catch (err) {
-            console.warn("[Inventory] Notification failed:", err);
-        }
+        // 觸發通知 (DISABLED: 前端已自行發送帶有完整 Metadata 的通知，後端不再重複發送)
+        // try {
+        //   const notif = input.notification || {};
+        //   const title = notif.title || "入庫成功";
+        //   const body = notif.body || `已成功新增食材：${item.name}`;
+        //   await notificationService.sendToRefrigeratorMembers(
+        //     refrigeratorId,
+        //     title,
+        //     body,
+        //     "stock",
+        //     { type: "inventory", payload: { itemId: item.id } },
+        //     "stock", // category
+        //     userId, // operatorId
+        //     "stockIn", // subType
+        //     notif.actorName, // from frontend or undefined
+        //     notif.groupName  // from frontend or undefined
+        //   );
+        // } catch (err) {
+        //   console.warn("[Inventory] Notification failed:", err);
+        // }
         res.status(201).json({
             status: true,
             message: "Created successfully",
@@ -268,23 +272,32 @@ router.post("/:id/consume", async (req, res) => {
             });
             return;
         }
-        // 觸發消耗通知 (Broadcast)
-        try {
-            const userId = getUserId(req);
-            if (userId) {
-                // 現在 consumeInventoryItem 會回傳 name 與 unit
-                const itemName = result.name;
-                const notif = input.notification || {};
-                // 預設文案
-                const defaultTitle = "食材消耗通知";
-                const defaultBody = `已消耗 ${input.quantity} ${result.unit} ${itemName}`;
-                await notificationService.sendToRefrigeratorMembers(refrigeratorId, notif.title || defaultTitle, notif.body || defaultBody, "stock", { type: "inventory", payload: { itemId: id } }, "stock", userId, "consume", // subType
-                notif.actorName, notif.groupName);
-            }
-        }
-        catch (err) {
-            console.warn("[Inventory] Consumption notification failed:", err);
-        }
+        // 觸發消耗通知 (DISABLED: 前端已自行發送帶有完整 Metadata 的通知，後端不再重複發送)
+        // try {
+        //   const userId = getUserId(req);
+        //   if (userId) {
+        //     // 現在 consumeInventoryItem 會回傳 name 與 unit
+        //     const itemName = result.name;
+        //     const notif = input.notification || {};
+        //     // 預設文案
+        //     const defaultTitle = "食材消耗通知";
+        //     const defaultBody = `已消耗 ${input.quantity} ${result.unit} ${itemName}`;
+        //     await notificationService.sendToRefrigeratorMembers(
+        //       refrigeratorId,
+        //       notif.title || defaultTitle,
+        //       notif.body || defaultBody,
+        //       "stock",
+        //       { type: "inventory", payload: { itemId: id } },
+        //       "stock",
+        //       userId,
+        //       "consume", // subType
+        //       notif.actorName,
+        //       notif.groupName
+        //     );
+        //   }
+        // } catch (err) {
+        //   console.warn("[Inventory] Consumption notification failed:", err);
+        // }
         res.json({
             status: true,
             message: "Consumed successfully",
