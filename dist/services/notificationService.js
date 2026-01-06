@@ -306,8 +306,8 @@ export const notificationService = {
     sendToRefrigeratorMembers: async (refrigeratorId, title, body, type, action, category = "stock", operatorId, subType, actorName, passedGroupName // [NEW] Allow caller to pass groupName
     ) => {
         // 1. 找出該冰箱的所有成員
-        // 我們假設 inventory_settings 有所有成員的設定資料
-        const membersResult = await query(`SELECT DISTINCT user_id FROM inventory_settings WHERE refrigerator_id = $1`, [refrigeratorId]);
+        // [MODIFIED] Using user_refrigerators based on migration for better reliability
+        const membersResult = await query(`SELECT user_id FROM user_refrigerators WHERE refrigerator_id = $1`, [refrigeratorId]);
         let memberIds = membersResult.rows.map((row) => row.user_id);
         // 1.1 決定群組名稱
         // 若 caller 有傳則用傳的，否則嘗試查詢 DB

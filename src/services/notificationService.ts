@@ -377,7 +377,18 @@ export const notificationService = {
 
     for (const userId of userIds) {
       try {
-        await notificationService.send(userId, title, body, type, action, undefined, subType, groupName, actorName, actorId);
+        await notificationService.send(
+          userId,
+          title,
+          body,
+          type,
+          action,
+          undefined,
+          subType,
+          groupName,
+          actorName,
+          actorId
+        );
         results.success.push(userId);
       } catch (error) {
         console.error(`[Notification] Failed to send to ${userId}:`, error);
@@ -404,9 +415,9 @@ export const notificationService = {
     passedGroupName?: string // [NEW] Allow caller to pass groupName
   ) => {
     // 1. 找出該冰箱的所有成員
-    // 我們假設 inventory_settings 有所有成員的設定資料
+    // [MODIFIED] Using user_refrigerators based on migration for better reliability
     const membersResult = await query(
-      `SELECT DISTINCT user_id FROM inventory_settings WHERE refrigerator_id = $1`,
+      `SELECT user_id FROM user_refrigerators WHERE refrigerator_id = $1`,
       [refrigeratorId]
     );
 
@@ -415,15 +426,21 @@ export const notificationService = {
     // 1.1 決定群組名稱
     // 若 caller 有傳則用傳的，否則嘗試查詢 DB
     let groupName: string | undefined = passedGroupName;
-    
+
     if (!groupName) {
       try {
-          const fridgeResult = await query(`SELECT name FROM refrigerators WHERE id = $1`, [refrigeratorId]);
-          if (fridgeResult.rows.length > 0) {
-              groupName = fridgeResult.rows[0].name;
-          }
+        const fridgeResult = await query(
+          `SELECT name FROM refrigerators WHERE id = $1`,
+          [refrigeratorId]
+        );
+        if (fridgeResult.rows.length > 0) {
+          groupName = fridgeResult.rows[0].name;
+        }
       } catch (e) {
-          console.warn(`[Notification] Failed to fetch group name for ${refrigeratorId}`, e);
+        console.warn(
+          `[Notification] Failed to fetch group name for ${refrigeratorId}`,
+          e
+        );
       }
     }
 

@@ -1,0 +1,29 @@
+🔍 Finding a user with multiple refrigerators...
+✅ Found User: 019b327e-3334-71e5-ba2f-5bf2d91c5148 (In 3 groups)
+
+📥 Fetching notifications for user...
+   Total Notifications: 50
+
+📊 Distribution by Group Name:
+{
+  "Unknown": 8,
+  "FuFuX教授": 3,
+  "我的冰箱": 16,
+  "徹適用": 1,
+  "七個火箭人": 6,
+  "我的冰箱ricky ": 2,
+  "fffffff": 2,
+  "巧可力吐司加薯餅": 12
+}
+
+Recent 10 Notifications:
+- [null] 🎉 FuFood v4202a42e684b2b96bc51ab00d18188ec1a5cba01 更新上線！ (ID: 4c8a49ef...)
+- [FuFuX教授] AI 辨識完成！食材已入庫 (ID: a2de85bc...)
+- [我的冰箱] 入庫成功 (ID: b4f79060...)
+- [FuFuX教授] 香菇 完成任務，光榮退役！ (ID: 7e6fab8f...)
+- [我的冰箱] 食材消耗通知 (ID: d70e56ea...)
+- [FuFuX教授] 番茄 完成任務，光榮退役！ (ID: d82653cd...)
+- [我的冰箱] 食材消耗通知 (ID: 04386e42...)
+- [徹適用] AI 辨識完成！食材已入庫 (ID: d3ca2728...)
+- [七個火箭人] AI 辨識完成！食材已入庫 (ID: a200654d...)
+- [七個火箭人] AI 辨識完成！食材已入庫 (ID: 2ea8c831...)

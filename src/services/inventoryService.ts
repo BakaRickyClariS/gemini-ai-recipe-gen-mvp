@@ -640,8 +640,19 @@ export const getInventorySettings = async (
          ON CONFLICT (id) DO NOTHING`,
         [refrigeratorId, "我的冰箱"]
       );
+
+      // [NEW] 同步確保使用者在 user_refrigerators 中 (Self-healing)
+      await query(
+        `INSERT INTO user_refrigerators (user_id, refrigerator_id, role)
+         VALUES ($1, $2, 'member')
+         ON CONFLICT (user_id, refrigerator_id) DO NOTHING`,
+        [userId, refrigeratorId]
+      );
     } catch (e) {
-      console.warn(`[Inventory] Failed to ensure refrigerator ${refrigeratorId}`, e);
+      console.warn(
+        `[Inventory] Failed to ensure refrigerator/member ${refrigeratorId}`,
+        e
+      );
     }
   }
 
