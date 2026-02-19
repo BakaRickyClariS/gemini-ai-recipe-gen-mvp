@@ -5,6 +5,8 @@
  */
 
 import jwt, { type SignOptions } from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+import { v4 as uuidv4 } from "uuid";
 import * as Sentry from "@sentry/node";
 import { config } from "../config/unifiedConfig.js";
 import { userRepository } from "../repositories/userRepository.js";
@@ -154,5 +156,65 @@ export const authService = {
       throw ApiError.notFound("User not found");
     }
     return user;
+  },
+
+  /**
+   * 一般註冊 (Email + Password)
+   */
+  async register(input: {
+    email: string;
+    password: string;
+    displayName: string;
+  }) {
+    // 1. Check if email exists
+    const existing = await userRepository.findByEmail(input.email);
+    if (existing) {
+      throw ApiError.conflict("Email already in use");
+    }
+
+    // 2. Hash password
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(input.password, salt);
+
+    // 3. Create user
+    const user = await userRepository.create({
+      id: uuidv4(),
+      email: input.email,
+      passwordHash,
+      displayName: input.displayName,
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(
+        input.displayName,
+      )}&background=random`,
+    });
+
+    // 4. Sign tokens
+    const accessToken = this.signAccessToken({ userId: user.id });
+    const refreshToken = this.signRefreshToken({ userId: user.id });
+
+    return { user, accessToken, refreshToken };
+  },
+
+  /**
+   * 一般登入 (Email + Password)
+   */
+  async login(input: { email: string; password: string }) {
+    // 1. Find user
+    const user = await userRepository.findByEmail(input.email);
+    if (!user || user.passwordHash === null) {
+      // Don't reveal if user exists or if they use OAuth only
+      throw ApiError.unauthorized("Invalid email or password");
+    }
+
+    // 2. Verify password
+    const valid = await bcrypt.compare(input.password, user.passwordHash);
+    if (!valid) {
+      throw ApiError.unauthorized("Invalid email or password");
+    }
+
+    // 3. Sign tokens
+    const accessToken = this.signAccessToken({ userId: user.id });
+    const refreshToken = this.signRefreshToken({ userId: user.id });
+
+    return { user, accessToken, refreshToken };
   },
 };

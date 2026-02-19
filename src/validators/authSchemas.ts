@@ -17,3 +17,14 @@ export const lineCallbackSchema = z.object({
 export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1).optional(),
 });
+
+export const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  displayName: z.string().min(1),
+});
+
+export const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});

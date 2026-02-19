@@ -127,4 +127,56 @@ export class AuthController extends BaseController {
       this.handleError(error, res, "AuthController.me");
     }
   }
+
+  /** POST /api/v2/auth/register */
+  async register(req: Request, res: Response): Promise<void> {
+    try {
+      const { user, accessToken, refreshToken } = await authService.register(
+        req.body,
+      );
+
+      res.cookie("access_token", accessToken, {
+        ...COOKIE_OPTIONS,
+        maxAge: config.jwt.accessExpiresIn * 1000,
+      });
+
+      res.cookie("refresh_token", refreshToken, {
+        ...COOKIE_OPTIONS,
+        maxAge: config.jwt.refreshExpiresIn * 1000,
+      });
+
+      this.handleCreated(res, {
+        user,
+        accessToken,
+      });
+    } catch (error) {
+      this.handleError(error, res, "AuthController.register");
+    }
+  }
+
+  /** POST /api/v2/auth/login */
+  async login(req: Request, res: Response): Promise<void> {
+    try {
+      const { user, accessToken, refreshToken } = await authService.login(
+        req.body,
+      );
+
+      res.cookie("access_token", accessToken, {
+        ...COOKIE_OPTIONS,
+        maxAge: config.jwt.accessExpiresIn * 1000,
+      });
+
+      res.cookie("refresh_token", refreshToken, {
+        ...COOKIE_OPTIONS,
+        maxAge: config.jwt.refreshExpiresIn * 1000,
+      });
+
+      this.handleSuccess(res, {
+        user,
+        accessToken,
+      });
+    } catch (error) {
+      this.handleError(error, res, "AuthController.login");
+    }
+  }
 }
