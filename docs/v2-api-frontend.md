@@ -7,9 +7,9 @@
 
 ## 認證 Auth
 
-### `GET /auth/line` — LINE OAuth 授權頁
+### `POST /auth/line/init` — LINE OAuth 授權頁
 
-回傳 302 重導向至 LINE 授權頁
+回傳 `200 OK` 帶有 `{ authUrl: "..." }`，前端自行轉導。
 
 ### `GET /auth/line/callback?code=xxx` — LINE OAuth Callback
 
@@ -30,7 +30,34 @@
 
 ### `POST /auth/refresh` — 刷新 Token
 
-**Body:** `{ "refreshToken": "..." }`
+**Body:** `{ "refreshToken": "..." }` (或 Cookie)
+
+### `POST /auth/logout` — 登出
+
+清除後端 Cookie。
+
+### `POST /auth/register` — Email 註冊
+
+**Body:**
+
+```json
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "displayName": "User Name"
+}
+```
+
+### `POST /auth/login` — Email 登入
+
+**Body:**
+
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
 
 ### `GET /auth/me` — 取得當前使用者 🔒
 
@@ -72,7 +99,7 @@
 
 ### `DELETE /groups/:id` — 刪除群組 🔒 (owner only)
 
-### `GET /groups/:id/members` — 列出成員 🔒
+### `GET /groups/:id` — 群組詳情 (含成員列表) 🔒
 
 ### `POST /groups/:id/invitations` — 建立邀請連結 🔒
 
@@ -93,7 +120,7 @@
 
 ### `GET /invitations/:token` — 查看邀請資訊 (🔓 公開)
 
-### `POST /groups/:id/join` — 加入群組 🔒
+### `POST /groups/join` — 加入群組 🔒
 
 **Body:** `{ "invitationToken": "uuid-token" }`
 
