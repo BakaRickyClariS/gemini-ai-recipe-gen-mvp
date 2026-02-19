@@ -43,7 +43,10 @@ export const config = {
   },
 
   cors: {
-    origins: optionalEnv("CORS_ORIGINS", "http://localhost:5173").split(","),
+    origins: optionalEnv(
+      "CORS_ORIGINS",
+      "https://fufood.vercel.app,http://localhost:5173,http://localhost:3000",
+    ).split(","),
   },
 
   rateLimit: {
