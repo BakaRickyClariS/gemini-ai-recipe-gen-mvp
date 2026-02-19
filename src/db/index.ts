@@ -6,9 +6,10 @@
 import pkg from "pg";
 const { Pool } = pkg;
 import type { QueryResult, QueryResultRow } from "pg";
+import { config } from "../config/unifiedConfig.js";
 
-// 從環境變數讀取連線字串
-const connectionString = process.env.DATABASE_URL;
+// 從 unifiedConfig 讀取連線字串
+const connectionString = config.database.url;
 
 if (!connectionString) {
   console.warn("⚠️ [DB] DATABASE_URL 未設定，資料庫功能將無法使用");
@@ -32,7 +33,7 @@ export const pool = connectionString
  */
 export const query = async <T extends QueryResultRow = QueryResultRow>(
   text: string,
-  params?: unknown[]
+  params?: unknown[],
 ): Promise<QueryResult<T>> => {
   if (!pool) {
     throw new Error("資料庫未連線，請設定 DATABASE_URL 環境變數");
