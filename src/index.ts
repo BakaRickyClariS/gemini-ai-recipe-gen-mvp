@@ -1,63 +1,41 @@
+import "./instrument";
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import multer from "multer";
 import path from "path";
 import fs from "fs";
 import swaggerUi from "swagger-ui-express";
-import {
-  generateRecipeFromText,
-  analyzeImageByUrl,
-  analyzeLocalImage,
-} from "./services/imageAnalysisService.js";
-import {
-  generateMultipleRecipes,
-  streamRecipe,
-  AI_SUGGESTION_PROMPTS,
-} from "./services/aiRecipeService.js";
-import {
-  aiRecipeErrorHandler,
-  validateAIRecipeRequest,
-  AIRecipeError,
-} from "./middleware/errorHandler.js";
-import type { AIRecipeRequest } from "./types/aiRecipe.js";
-import { uploadToCloudinary } from "./services/mediaService.js";
-import { analyzeMultipleIngredients } from "./services/multipleIngredientsService.js";
-import recipeRoutes from "./routes/recipeRoutes.js";
-import inventoryRoutes from "./routes/inventoryRoutes.js";
 import { testConnection } from "./db/index.js";
+import { config } from "./config/unifiedConfig.js";
+
+// ===== v1 Routes =====
+import v1AuthRoutes from "./routes/v1/authRoutes.js";
+import v1InventoryRoutes from "./routes/v1/inventoryRoutes.js";
+import v1NotificationRoutes from "./routes/v1/notificationRoutes.js";
+import v1RecipeRoutes from "./routes/v1/recipeRoutes.js";
+import v1AdminRoutes from "./routes/v1/adminRoutes.js";
+import v1CronRoutes from "./routes/v1/cronRoutes.js";
+import v1AiRoutes from "./routes/v1/aiRoutes.js";
+
+// ===== v2 Routes =====
+import v2AuthRoutes from "./routes/v2/authRoutes.js";
+import v2ProfileRoutes from "./routes/v2/profileRoutes.js";
+import v2GroupRoutes from "./routes/v2/groupRoutes.js";
+import v2ShoppingListRoutes from "./routes/v2/shoppingListRoutes.js";
+import v2SubscriptionRoutes from "./routes/v2/subscriptionRoutes.js";
+
+// ===== Middleware & Error Handling =====
+import { aiRecipeErrorHandler } from "./middleware/errorHandler.js";
+import { GroupController } from "./controllers/GroupController.js";
+import { apiLimiter } from "./middleware/rateLimiter.js";
+import { ApiError } from "./errors/ApiError.js";
+import * as Sentry from "@sentry/node";
 
 const app = express();
-const PORT = Number(process.env.PORT || 3000);
+const PORT = config.port;
 
-// 智能判斷上傳目錄：
-// - 優先使用 /tmp（serverless 環境標準：Vercel、AWS Lambda、Google Cloud Functions）
-// - 回退到相對路徑（本地開發或 Docker）
-const uploadDir = (() => {
-  try {
-    // 檢查 /tmp 目錄是否存在（適用於所有 serverless 環境）
-    if (fs.existsSync("/tmp")) {
-      return "/tmp/uploads";
-    }
-    // /tmp 不存在，使用相對路徑（本地開發或特殊環境）
-    return "uploads/";
-  } catch {
-    // 出錯時回退到相對路徑
-    return "uploads/";
-  }
-})();
-
-// 確保上傳目錄存在
-// - Serverless 環境每次冷啟動時 /tmp 是空的
-// - 本地/Docker 環境首次運行時目錄可能不存在
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-  console.log(`📁 [INFO] 建立上傳目錄: ${uploadDir}`);
-}
-
-const upload = multer({ dest: uploadDir });
-
+// ===== Middleware =====
 app.use(
   cors({
     origin: [
@@ -75,21 +53,19 @@ app.use(
       "X-Requested-With",
       "Accept",
       "Origin",
-      "X-User-Id", // 前端傳遞使用者 ID 用於庫存 API
+      "X-User-Id", // 向下相容：前端傳遞使用者 ID
     ],
-  })
+  }),
 );
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Load OpenAPI spec
+// ===== Swagger UI =====
 const openapiPath = path.join(process.cwd(), "openapi.json");
 const openapi = JSON.parse(fs.readFileSync(openapiPath, "utf-8"));
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(openapi));
 
-// Swagger UI（CDN 版本）- 適用於 Vercel Serverless 環境
-// 使用 CDN 載入靜態資源，避免 Vercel 上 CSS/JS 無法載入的問題
 const swaggerCdnOptions = {
   customCssUrl: "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
   customJs: [
@@ -100,72 +76,69 @@ const swaggerCdnOptions = {
 app.use(
   "/docs-cdn",
   swaggerUi.serve,
-  swaggerUi.setup(openapi, swaggerCdnOptions)
+  swaggerUi.setup(openapi, swaggerCdnOptions),
 );
 
-// ===== 食譜儲存 API =====
-app.use("/api/v1/recipes", recipeRoutes);
+// ===== v1 API Routes =====
+app.use("/api/v1/auth", v1AuthRoutes);
+app.use("/api/v1/recipes", v1RecipeRoutes);
+app.use("/api/v1/refrigerators/:refrigeratorId/inventory", v1InventoryRoutes);
+app.use("/api/v1/notifications", v1NotificationRoutes);
+app.use("/api/v1/admin", v1AdminRoutes);
+app.use("/api/cron", v1CronRoutes);
+app.use("/api/v1/ai", v1AiRoutes);
+app.use("/api/v1/media", v1AiRoutes); // media/upload 也在 aiRoutes 中
 
-import notificationRoutes from "./routes/notificationRoutes.js";
-import cronRoutes from "./routes/cronRoutes.js";
-import authRoutes from "./routes/authRoutes.js";
-import adminRoutes from "./routes/adminRoutes.js";
+// ===== v2 API Routes =====
+app.use("/api/v2/auth", v2AuthRoutes);
+app.use("/api/v2/profile", v2ProfileRoutes);
+app.use("/api/v2/groups", v2GroupRoutes);
+app.use("/api/v2", v2ShoppingListRoutes);
+app.use("/api/v2/subscriptions", v2SubscriptionRoutes);
 
-// ===== Auth API (Session Sync) =====
-app.use("/api/v1/auth", authRoutes);
+// Public invitation lookup (no auth required)
+const groupController = new GroupController();
+app.get("/api/v2/invitations/:token", (req, res) =>
+  groupController.getInvitation(req, res),
+);
 
-// ... (existing code)
-
-// ===== 庫存管理 API =====
-app.use("/api/v1/refrigerators/:refrigeratorId/inventory", inventoryRoutes);
-
-// ===== 推播通知 API =====
-app.use("/api/v1/notifications", notificationRoutes);
-
-// ===== 管理員 API =====
-app.use("/api/v1/admin", adminRoutes);
-
-// ===== Cron Job API =====
-app.use("/api/cron", cronRoutes);
+// Rate limit all v2
+app.use("/api/v2", apiLimiter);
 
 // 測試資料庫連線（背景執行）
 testConnection().catch(console.error);
 
-// Root route - API info
+// ===== Utility Endpoints =====
 app.get("/", (_req, res) => {
   res.json({
     name: "Recipe API",
-    version: "2.3.0", // Minor version bump
+    version: "3.0.0",
     description: "AI 食譜生成 API - 支援 Gemini AI 多食譜推薦與 SSE Streaming",
     endpoints: {
       health: "/health",
       status: "/status",
       documentation: "/docs (本地開發) 或 /docs-cdn (Vercel 部署)",
       openapi: "/openapi.json",
-      generateRecipe: "POST /api/v1/ai/recipe",
-      streamRecipe: "POST /api/v1/ai/recipe/stream",
-      recipeSuggestions: "GET /api/v1/ai/recipe/suggestions",
-      analyzeImage: "POST /api/v1/ai/analyze-image",
-      savedRecipes: "GET/POST /api/v1/recipes (食譜儲存)",
-      inventory:
-        "GET/POST /api/v1/refrigerators/:refrigeratorId/inventory (庫存管理)",
-      inventorySettings:
-        "GET/PUT /api/v1/refrigerators/:refrigeratorId/inventory/settings (庫存設定)",
-      notifications: "POST /api/v1/notifications/token (推播註冊)",
-    },
-    features: {
-      multipleRecipes: "支援一次產生多道食譜推薦",
-      sseStreaming: "支援 Server-Sent Events 即時串流",
-      dailyLimit: "每日查詢次數限制",
-      recipeStorage: "支援儲存 AI 生成的食譜",
-      inventoryManagement: "支援庫存食材管理 (CRUD、消耗、統計)",
-      pushNotifications: "支援 FCM 推播、通知中心與過期提醒 Cron Job",
-      cronJobs: "支援定時任務（如：檢查食材過期）",
+      v1: {
+        generateRecipe: "POST /api/v1/ai/recipe",
+        streamRecipe: "POST /api/v1/ai/recipe/stream",
+        recipeSuggestions: "GET /api/v1/ai/recipe/suggestions",
+        analyzeImage: "POST /api/v1/ai/analyze-image",
+        savedRecipes: "GET/POST /api/v1/recipes",
+        inventory: "GET/POST /api/v1/refrigerators/:id/inventory",
+        notifications: "POST /api/v1/notifications/token",
+      },
+      v2: {
+        auth: "/api/v2/auth",
+        profile: "/api/v2/profile",
+        groups: "/api/v2/groups",
+        shoppingLists: "/api/v2/groups/:id/shopping-lists",
+        subscriptions: "/api/v2/subscriptions",
+      },
     },
   });
 });
 
-// Provide OpenAPI spec as JSON
 app.get("/openapi.json", (_req, res) => {
   res.json(openapi);
 });
@@ -174,7 +147,7 @@ app.get("/health", (_req, res) => {
   res.json({
     status: "✅ 食譜 API 運行正常",
     timestamp: new Date().toISOString(),
-    version: "1.0.0",
+    version: "3.0.0",
   });
 });
 
@@ -186,265 +159,36 @@ app.get("/status", (_req, res) => {
   });
 });
 
-// ===== AI 食譜生成 API（新版）=====
-
-// 1. AI 食譜生成（標準回應）
-app.post(
-  "/api/v1/ai/recipe",
-  validateAIRecipeRequest,
-  async (req, res, next) => {
-    try {
-      const request: AIRecipeRequest = req.body;
-      const userId = (req.headers["x-user-id"] as string) || "anonymous";
-
-      const response = await generateMultipleRecipes(request, userId);
-      return res.json(response);
-    } catch (err) {
-      next(err);
-    }
-  }
-);
-
-// 2. AI 食譜生成（SSE Streaming）
-app.post(
-  "/api/v1/ai/recipe/stream",
-  validateAIRecipeRequest,
-  async (req, res) => {
-    const request: AIRecipeRequest = req.body;
-    const userId = (req.headers["x-user-id"] as string) || "anonymous";
-
-    // 設定 SSE headers
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no"); // 禁用 Nginx 緩衝
-
-    try {
-      for await (const event of streamRecipe(request, userId)) {
-        res.write(`event: ${event.event}\n`);
-        res.write(`data: ${JSON.stringify(event)}\n\n`);
-      }
-    } catch (err: any) {
-      const errorEvent = {
-        id: `evt-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        event: "error",
-        data: {
-          code: err.code || "AI_005",
-          message: err.message || "AI 服務暫時無法使用",
-        },
-      };
-      res.write(`event: error\n`);
-      res.write(`data: ${JSON.stringify(errorEvent)}\n\n`);
-    } finally {
-      res.end();
-    }
-  }
-);
-
-// 3. 取得預設 Prompt 建議
-app.get("/api/v1/ai/recipe/suggestions", (_req, res) => {
-  res.json({
-    status: true,
-    message: "ok",
-    data: {
-      suggestions: AI_SUGGESTION_PROMPTS,
-    },
-  });
-});
-
-// ===== 媒體與影像辨識 API =====
-
-// 4. 媒體上傳 API
-app.post("/api/v1/media/upload", upload.single("file"), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({
-      success: false,
-      code: "MEDIA_001",
-      message: "未提供檔案",
-    });
-  }
-
-  try {
-    const result = await uploadToCloudinary(req.file.path);
-
-    // 上傳後刪除本地暫存
-    try {
-      fs.unlinkSync(req.file.path);
-    } catch (err) {
-      console.warn(`[WARN] 無法刪除暫存檔: ${req.file.path}`);
-    }
-
-    return res.json({
-      success: true,
-      data: {
-        url: result.secure_url,
-        publicId: result.public_id,
-      },
-    });
-  } catch (error: any) {
-    console.error("Upload error:", error);
-    return res.status(500).json({
-      success: false,
-      code: "MEDIA_005",
-      message: "上傳失敗",
-      details: error.message,
-    });
-  }
-});
-
-// 2. 影像辨識 API (更新版：確保回傳包含 imageUrl)
-app.post(
-  "/api/v1/ai/analyze-image",
-  upload.single("file"),
-  async (req, res) => {
-    try {
-      let imageUrl: string | undefined = req.body?.imageUrl;
-      let finalImageUrl = imageUrl;
-
-      // ✅ 1️⃣ 有上傳檔案（本地模式）
-      if (req.file && !imageUrl) {
-        const filePath = req.file.path;
-
-        // 先上傳到 Cloudinary (根據最新開發習慣，分析前應有 URL，或分析完回傳該 URL)
-        // 為了符合 spec 要求的回應結構，如果 user 直接上傳 file，我們也幫他傳到 Cloudinary
-        try {
-          const uploadResult = await uploadToCloudinary(filePath);
-          finalImageUrl = uploadResult.secure_url;
-        } catch (uploadErr) {
-          console.error("[Upload Error during analyze]", uploadErr);
-          // 如果上傳失敗，仍繼續嘗試分析本地檔，但 imageUrl 可能為 null 或暫存
-        }
-
-        // 呼叫本地分析函式
-        const data = await analyzeLocalImage(filePath);
-
-        // 分析後刪除暫存檔案
-        try {
-          fs.unlinkSync(filePath);
-        } catch {
-          console.warn(`[WARN] 無法刪除暫存檔: ${filePath}`);
-        }
-
-        // 成功回應
-        return res.json({
-          success: true,
-          data: {
-            ...data,
-            imageUrl: finalImageUrl || null, // 加入實體 URL
-          },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // ✅ 2️⃣ 若有提供 imageUrl
-      if (imageUrl) {
-        const data = await analyzeImageByUrl(imageUrl);
-        return res.json({
-          success: true,
-          data: {
-            ...data,
-            imageUrl: finalImageUrl,
-          },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // ❌ 3️⃣ 若兩者都沒提供
-      return res.status(400).json({
-        success: false,
-        error: '請提供 imageUrl 或使用 form-data 上傳檔案（欄位名稱為 "file"）',
-      });
-    } catch (err: any) {
-      console.error("[Analyze Image Error]", err);
-      return res.status(500).json({
-        success: false,
-        error: err?.message || "Internal server error",
-      });
-    }
-  }
-);
-
-// 3. 多食材影像分析 API (NEW)
-
-app.post(
-  "/api/v1/ai/analyze-image/multiple",
-  upload.single("file"),
-  async (req, res) => {
-    try {
-      let imageUrl: string | undefined = req.body?.imageUrl;
-      const cropImages = req.body?.cropImages !== "false"; // 預設 true
-      const maxIngredients = parseInt(req.body?.maxIngredients) || 10;
-
-      let imageSource: string | Buffer;
-
-      // 1️⃣ 有上傳檔案（本地模式）
-      if (req.file) {
-        // 使用檔案路徑，讓 service 決定如何讀取
-        imageSource = req.file.path;
-      }
-      // 2️⃣ 若有提供 imageUrl
-      else if (imageUrl) {
-        imageSource = imageUrl;
-      } else {
-        return res.status(400).json({
-          success: false,
-          error:
-            '請提供 imageUrl 或使用 form-data 上傳檔案（欄位名稱為 "file"）',
-        });
-      }
-
-      console.log(
-        `[Analyze Multiple] Start analyzing: ${req.file ? "File" : "URL"}`
-      );
-
-      const result = await analyzeMultipleIngredients(imageSource, {
-        cropImages,
-        maxIngredients,
-      });
-
-      // 如果是本地檔案，處理完後刪除暫存檔
-      if (req.file) {
-        try {
-          fs.unlinkSync(req.file.path);
-        } catch (e) {
-          /* ignore */
-        }
-      }
-
-      return res.json({
-        success: true,
-        data: result,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (err: any) {
-      console.error("[Analyze Multiple Error]", err);
-
-      // 如果是本地檔案，出錯也要刪除
-      if (req.file) {
-        try {
-          fs.unlinkSync(req.file.path);
-        } catch (e) {
-          /* ignore */
-        }
-      }
-
-      return res.status(500).json({
-        success: false,
-        error: err?.message || "Internal server error",
-      });
-    }
-  }
-);
-
-// 錯誤處理中介層
+// ===== Error Handlers =====
+// v1 AI error handler
 app.use(aiRecipeErrorHandler);
 
+// v2 centralized error handler
+app.use(
+  (
+    err: unknown,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    if (err instanceof ApiError) {
+      res.status(err.statusCode).json({
+        success: false,
+        error: { code: err.code, message: err.message },
+      });
+      return;
+    }
+    Sentry.captureException(err);
+    console.error("[Global Error]", err);
+    res.status(500).json({
+      success: false,
+      error: { code: "INTERNAL_ERROR", message: "Internal server error" },
+    });
+  },
+);
+
 // 本地開發時啟動伺服器
-if (
-  process.env.NODE_ENV !== "production" ||
-  process.env.npm_lifecycle_event === "dev"
-) {
+if (config.env !== "production" || process.env.npm_lifecycle_event === "dev") {
   app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
     console.log(`📚 Swagger UI at http://localhost:${PORT}/docs`);

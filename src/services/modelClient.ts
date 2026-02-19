@@ -16,53 +16,39 @@ export type ModelPurpose = "recipe" | "vision" | "text";
 export const MODEL_PRIORITY: Record<ModelPurpose, string[]> = {
   // 食譜生成：主力 (User Pref) → Stable
   recipe: [
-    "gemini-2.5-flash", 
-    "gemini-3-flash", 
+    "gemini-2.5-flash",
+    "gemini-3-flash",
     "gemini-2.5-flash-lite",
-    "gemini-1.5-flash", 
-    "gemini-1.5-pro"
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
   ],
   // 影像分析：主力 (User Pref) → Stable
   vision: [
-    "gemini-2.5-flash-lite", 
-    "gemini-2.5-flash", 
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
     "gemini-3-flash",
     "gemini-1.5-flash",
-    "gemini-1.5-pro"
+    "gemini-1.5-pro",
   ],
   // 文字生成：主力 (User Pref) → Stable
   text: [
-    "gemini-2.5-flash", 
+    "gemini-2.5-flash",
     "gemini-3-flash",
     "gemini-1.5-flash",
-    "gemini-1.5-pro"
+    "gemini-1.5-pro",
   ],
 };
+
+import { getGeminiKeys } from "../config/unifiedConfig.js";
 
 // ===== API Key 管理 =====
 
 /**
  * 取得所有可用的 API Keys
- * 支援格式：
- * - GEMINI_API_KEY 或 GOOGLE_API_KEY（單一 key）
- * - GEMINI_API_KEY_1, GEMINI_API_KEY_2, ...（多個 keys）
+ * 使用 unifiedConfig 集中管理
  */
 const getApiKeys = (): string[] => {
-  const keys: string[] = [];
-
-  // 主要 API Key
-  const primaryKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (primaryKey) {
-    keys.push(primaryKey);
-  }
-
-  // 額外的 API Keys (GEMINI_API_KEY_1, GEMINI_API_KEY_2, ...)
-  for (let i = 1; i <= 10; i++) {
-    const key = process.env[`GEMINI_API_KEY_${i}`];
-    if (key && !keys.includes(key)) {
-      keys.push(key);
-    }
-  }
+  const keys = getGeminiKeys();
 
   if (keys.length === 0) {
     throw new Error("Missing GEMINI_API_KEY or GOOGLE_API_KEY");
@@ -103,7 +89,7 @@ const isQuotaError = (error: unknown): boolean => {
  * @returns 模型實例和使用的模型名稱
  */
 export const getModelWithFallback = (
-  purpose: ModelPurpose
+  purpose: ModelPurpose,
 ): { model: GenerativeModel; modelName: string } => {
   const apiKey = getApiKey();
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -123,7 +109,7 @@ export const getModelWithFallback = (
  */
 export const executeWithFallback = async <T>(
   purpose: ModelPurpose,
-  executeRequest: (model: GenerativeModel) => Promise<T>
+  executeRequest: (model: GenerativeModel) => Promise<T>,
 ): Promise<{ result: T; modelUsed: string; apiKeyIndex: number }> => {
   const apiKeys = getApiKeys();
   const models = MODEL_PRIORITY[purpose];
@@ -139,22 +125,27 @@ export const executeWithFallback = async <T>(
     // 遍歷所有模型
     for (const modelName of models) {
       try {
-        console.log(`[ModelClient] 🔄 嘗試: API Key #${keyIndex + 1}/${apiKeys.length} | 模型: ${modelName} | 用途: ${purpose}`);
+        console.log(
+          `[ModelClient] 🔄 嘗試: API Key #${keyIndex + 1}/${apiKeys.length} | 模型: ${modelName} | 用途: ${purpose}`,
+        );
         const model = genAI.getGenerativeModel({ model: modelName });
         const result = await executeRequest(model);
-        console.log(`[ModelClient] ✅ 成功: API Key #${keyIndex + 1} | 模型: ${modelName} | 用途: ${purpose}`);
+        console.log(
+          `[ModelClient] ✅ 成功: API Key #${keyIndex + 1} | 模型: ${modelName} | 用途: ${purpose}`,
+        );
         return { result, modelUsed: modelName, apiKeyIndex: keyIndex };
       } catch (error) {
         lastError = error as Error;
 
         console.warn(
-          `[ModelClient] ❌ 失敗: API Key #${keyIndex + 1} | 模型: ${modelName} | 錯誤: ${lastError.message}`
+          `[ModelClient] ❌ 失敗: API Key #${keyIndex + 1} | 模型: ${modelName} | 錯誤: ${lastError.message}`,
         );
 
-        const isFatal = lastError.message.includes("400") && 
-                       !lastError.message.includes("Bad Request") && 
-                       !lastError.message.includes("Invalid Argument"); 
-        
+        const isFatal =
+          lastError.message.includes("400") &&
+          !lastError.message.includes("Bad Request") &&
+          !lastError.message.includes("Invalid Argument");
+
         console.log(`[ModelClient] ⚠️ 發生錯誤，嘗試下一個備用方案...`);
         continue;
       }
@@ -162,13 +153,15 @@ export const executeWithFallback = async <T>(
 
     // 該 API Key 的所有模型都失敗，嘗試下一個 API Key
     if (keyIndex < apiKeys.length - 1) {
-      console.log(`[ModelClient] 🔄 API Key #${keyIndex + 1} 所有模型已用盡，切換到 API Key #${keyIndex + 2}...`);
+      console.log(
+        `[ModelClient] 🔄 API Key #${keyIndex + 1} 所有模型已用盡，切換到 API Key #${keyIndex + 2}...`,
+      );
     }
   }
 
   // 所有 API Keys 和模型都失敗
   throw new Error(
-    `All API keys and models exhausted. Last error: ${lastError?.message || "Unknown error"}`
+    `All API keys and models exhausted. Last error: ${lastError?.message || "Unknown error"}`,
   );
 };
 

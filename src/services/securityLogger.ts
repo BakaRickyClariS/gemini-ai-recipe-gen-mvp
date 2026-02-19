@@ -14,8 +14,9 @@ export type SecurityEvent = {
   timestamp: string;
   details: Record<string, unknown>;
 };
+import { config } from "../config/unifiedConfig.js";
 
-const LOG_LEVEL = process.env.AI_SECURITY_LOG_LEVEL || "warn";
+const LOG_LEVEL = config.ai.securityLogLevel;
 
 /**
  * 記錄安全事件

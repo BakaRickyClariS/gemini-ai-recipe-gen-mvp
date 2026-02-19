@@ -11,20 +11,18 @@ import type {
   RecipeListItem,
 } from "../types/aiRecipe.js";
 import type { AIStreamEvent } from "../types/aiStreamEvents.js";
-import { AIRecipeError } from "../middleware/errorHandler.js";
+import { AIRecipeError, type AIErrorCode } from "../middleware/errorHandler.js";
 import { generateRecipeImages } from "./imageGenerationService.js";
 import { executeWithFallback, getModelWithFallback } from "./modelClient.js";
 import { validateAIInput } from "../middleware/aiSecurity.js";
 import { validatePromptContent } from "../middleware/promptValidator.js";
 import { filterRecipe, filterGreeting } from "./outputFilter.js";
 import { logSecurityEvent } from "./securityLogger.js";
+import { config } from "../config/unifiedConfig.js";
 
 // ===== 常數定義 =====
-const AI_DAILY_LIMIT =
-  process.env.AI_DAILY_LIMIT !== undefined
-    ? Number(process.env.AI_DAILY_LIMIT)
-    : 3;
-const AI_REQUEST_TIMEOUT = Number(process.env.AI_REQUEST_TIMEOUT) || 30000;
+const AI_DAILY_LIMIT = config.ai.dailyLimit;
+const AI_REQUEST_TIMEOUT = config.ai.requestTimeout;
 
 // 簡易的每日查詢次數追蹤（生產環境應使用 Redis 或資料庫）
 const userQueryCount = new Map<string, { count: number; date: string }>();
@@ -213,15 +211,16 @@ function parseJsonFromText(text: string): {
 
     console.log(
       "[AI Recipe] JSON parsed successfully. Recipes count:",
-      parsed.recipes?.length || 0
+      parsed.recipes?.length || 0,
     );
     return parsed;
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     // 解析失敗，輸出詳細錯誤以利除錯
-    console.error("[AI Recipe] JSON parse error:", err.message);
+    console.error("[AI Recipe] JSON parse error:", message);
     console.error(
       "[AI Recipe] Failed to parse content (first 1000 chars):",
-      sliced.substring(0, 1000)
+      sliced.substring(0, 1000),
     );
     console.error("[AI Recipe] Full raw response for debugging:", text); // 輸出全文以利定位問題
 
@@ -239,7 +238,7 @@ function parseJsonFromText(text: string): {
  */
 export async function generateMultipleRecipes(
   request: AIRecipeRequest,
-  userId: string = "anonymous"
+  userId: string = "anonymous",
 ): Promise<AIRecipeResponse> {
   // 檢查查詢限制
   const remainingQueries = checkAndUpdateQueryLimit(userId);
@@ -247,7 +246,7 @@ export async function generateMultipleRecipes(
   // 1. 安全驗證 - 基礎 (長度、格式)
   const validation = validateAIInput(request.prompt);
   if (!validation.isValid) {
-    throw new AIRecipeError((validation.code as any) || "AI_001", {
+    throw new AIRecipeError((validation.code ?? "AI_001") as AIErrorCode, {
       reason: validation.error,
     });
   }
@@ -255,7 +254,7 @@ export async function generateMultipleRecipes(
   // 1.5 安全驗證 - 進階 (Prompt Injection)
   const promptCheck = validatePromptContent(request.prompt, userId);
   if (!promptCheck.isValid) {
-    throw new AIRecipeError((promptCheck.code as any) || "AI_007", {
+    throw new AIRecipeError((promptCheck.code ?? "AI_007") as AIErrorCode, {
       reason: promptCheck.error,
     });
   }
@@ -337,7 +336,7 @@ export async function generateMultipleRecipes(
       console.warn(
         `[AI Recipe] Filtered out ${
           recipes.length - filteredRecipes.length
-        } unsafe recipes.`
+        } unsafe recipes.`,
       );
     }
 
@@ -357,22 +356,23 @@ export async function generateMultipleRecipes(
         remainingQueries,
       },
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     clearTimeout(timeoutId);
 
-    console.error("[AI Recipe] Error occurred:", err.message);
-    console.error("[AI Recipe] Error stack:", err.stack);
+    const errObj = err instanceof Error ? err : new Error(String(err));
+    console.error("[AI Recipe] Error occurred:", errObj.message);
+    console.error("[AI Recipe] Error stack:", errObj.stack);
 
-    if (err.name === "AbortError") {
+    if (errObj.name === "AbortError") {
       throw new AIRecipeError("AI_006");
     }
 
     // 如果已經是 AIRecipeError，直接重新拋出
-    if (err instanceof AIRecipeError) {
-      throw err;
+    if (errObj instanceof AIRecipeError) {
+      throw errObj;
     }
 
-    throw new AIRecipeError("AI_005", { originalError: err.message });
+    throw new AIRecipeError("AI_005", { originalError: errObj.message });
   }
 }
 
@@ -382,7 +382,7 @@ export async function generateMultipleRecipes(
  */
 export async function* streamRecipe(
   request: AIRecipeRequest,
-  userId: string = "anonymous"
+  userId: string = "anonymous",
 ): AsyncGenerator<AIStreamEvent> {
   const sessionId = uuidv4();
   const remainingQueries = checkAndUpdateQueryLimit(userId);
@@ -395,7 +395,7 @@ export async function* streamRecipe(
       timestamp: new Date().toISOString(),
       event: "error",
       data: {
-        code: (validation.code as any) || "AI_001",
+        code: (validation.code ?? "AI_001") as string,
         message: validation.error || "Invalid input",
       },
     };
@@ -410,7 +410,7 @@ export async function* streamRecipe(
       timestamp: new Date().toISOString(),
       event: "error",
       data: {
-        code: (promptCheck.code as any) || "AI_007",
+        code: (promptCheck.code ?? "AI_007") as string,
         message: promptCheck.error || "Potential prompt injection",
       },
     };
@@ -532,14 +532,15 @@ export async function* streamRecipe(
         remainingQueries,
       },
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errObj = err instanceof Error ? err : new Error(String(err));
     yield {
       id: `evt-${Date.now()}-error`,
       timestamp: new Date().toISOString(),
       event: "error",
       data: {
         code: "AI_005",
-        message: err.message || "AI 服務暫時無法使用",
+        message: errObj.message || "AI 服務暫時無法使用",
       },
     };
   }
