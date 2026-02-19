@@ -10,11 +10,10 @@ import { executeWithFallback, getModelWithFallback } from "./modelClient.js";
 import { validateAIInput } from "../middleware/aiSecurity.js";
 import { validatePromptContent } from "../middleware/promptValidator.js";
 import { filterRecipe, filterGreeting } from "./outputFilter.js";
+import { config } from "../config/unifiedConfig.js";
 // ===== 常數定義 =====
-const AI_DAILY_LIMIT = process.env.AI_DAILY_LIMIT !== undefined
-    ? Number(process.env.AI_DAILY_LIMIT)
-    : 3;
-const AI_REQUEST_TIMEOUT = Number(process.env.AI_REQUEST_TIMEOUT) || 30000;
+const AI_DAILY_LIMIT = config.ai.dailyLimit;
+const AI_REQUEST_TIMEOUT = config.ai.requestTimeout;
 // 簡易的每日查詢次數追蹤（生產環境應使用 Redis 或資料庫）
 const userQueryCount = new Map();
 function getTodayDate() {
@@ -177,8 +176,9 @@ function parseJsonFromText(text) {
         return parsed;
     }
     catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
         // 解析失敗，輸出詳細錯誤以利除錯
-        console.error("[AI Recipe] JSON parse error:", err.message);
+        console.error("[AI Recipe] JSON parse error:", message);
         console.error("[AI Recipe] Failed to parse content (first 1000 chars):", sliced.substring(0, 1000));
         console.error("[AI Recipe] Full raw response for debugging:", text); // 輸出全文以利定位問題
         return {
@@ -197,14 +197,14 @@ export async function generateMultipleRecipes(request, userId = "anonymous") {
     // 1. 安全驗證 - 基礎 (長度、格式)
     const validation = validateAIInput(request.prompt);
     if (!validation.isValid) {
-        throw new AIRecipeError(validation.code || "AI_001", {
+        throw new AIRecipeError((validation.code ?? "AI_001"), {
             reason: validation.error,
         });
     }
     // 1.5 安全驗證 - 進階 (Prompt Injection)
     const promptCheck = validatePromptContent(request.prompt, userId);
     if (!promptCheck.isValid) {
-        throw new AIRecipeError(promptCheck.code || "AI_007", {
+        throw new AIRecipeError((promptCheck.code ?? "AI_007"), {
             reason: promptCheck.error,
         });
     }
@@ -286,16 +286,17 @@ export async function generateMultipleRecipes(request, userId = "anonymous") {
     }
     catch (err) {
         clearTimeout(timeoutId);
-        console.error("[AI Recipe] Error occurred:", err.message);
-        console.error("[AI Recipe] Error stack:", err.stack);
-        if (err.name === "AbortError") {
+        const errObj = err instanceof Error ? err : new Error(String(err));
+        console.error("[AI Recipe] Error occurred:", errObj.message);
+        console.error("[AI Recipe] Error stack:", errObj.stack);
+        if (errObj.name === "AbortError") {
             throw new AIRecipeError("AI_006");
         }
         // 如果已經是 AIRecipeError，直接重新拋出
-        if (err instanceof AIRecipeError) {
-            throw err;
+        if (errObj instanceof AIRecipeError) {
+            throw errObj;
         }
-        throw new AIRecipeError("AI_005", { originalError: err.message });
+        throw new AIRecipeError("AI_005", { originalError: errObj.message });
     }
 }
 /**
@@ -313,7 +314,7 @@ export async function* streamRecipe(request, userId = "anonymous") {
             timestamp: new Date().toISOString(),
             event: "error",
             data: {
-                code: validation.code || "AI_001",
+                code: (validation.code ?? "AI_001"),
                 message: validation.error || "Invalid input",
             },
         };
@@ -327,7 +328,7 @@ export async function* streamRecipe(request, userId = "anonymous") {
             timestamp: new Date().toISOString(),
             event: "error",
             data: {
-                code: promptCheck.code || "AI_007",
+                code: (promptCheck.code ?? "AI_007"),
                 message: promptCheck.error || "Potential prompt injection",
             },
         };
@@ -437,13 +438,14 @@ export async function* streamRecipe(request, userId = "anonymous") {
         };
     }
     catch (err) {
+        const errObj = err instanceof Error ? err : new Error(String(err));
         yield {
             id: `evt-${Date.now()}-error`,
             timestamp: new Date().toISOString(),
             event: "error",
             data: {
                 code: "AI_005",
-                message: err.message || "AI 服務暫時無法使用",
+                message: errObj.message || "AI 服務暫時無法使用",
             },
         };
     }

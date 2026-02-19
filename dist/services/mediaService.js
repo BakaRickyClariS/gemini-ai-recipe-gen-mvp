@@ -1,12 +1,11 @@
-import { v2 as cloudinary } from 'cloudinary';
-import { Readable } from 'stream';
+import { v2 as cloudinary } from "cloudinary";
+import { Readable } from "stream";
+import { config } from "../config/unifiedConfig.js";
 // 設定 Cloudinary
-// 若有 API_KEY/SECRET，SDK 會自動使用設定好的 Signed 模式
-// 若無，我們需手動呼叫 unsigned_upload
 cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
+    cloud_name: config.cloudinary.cloudName,
+    api_key: config.cloudinary.apiKey,
+    api_secret: config.cloudinary.apiSecret,
 });
 /**
  * 上傳圖片至 Cloudinary
@@ -14,26 +13,26 @@ cloudinary.config({
  * @param file 檔案路徑 (string) 或 Buffer
  */
 export async function uploadToCloudinary(file) {
-    const hasApiKey = !!process.env.CLOUDINARY_API_KEY;
-    const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET;
+    const hasApiKey = !!config.cloudinary.apiKey;
+    const uploadPreset = config.cloudinary.uploadPreset || undefined;
     // 1. 檢查是否缺漏必要設定
     if (!hasApiKey && !uploadPreset) {
-        throw new Error('Cloudinary configuration missing: Must provide either API_KEY/SECRET or UPLOAD_PRESET.');
+        throw new Error("Cloudinary configuration missing: Must provide either API_KEY/SECRET or UPLOAD_PRESET.");
     }
     // 2. 準備上傳選項
     const options = {
-        folder: 'fufood',
-        resource_type: 'image',
+        folder: "fufood",
+        resource_type: "image",
         transformation: [
-            { quality: 'auto', fetch_format: 'auto' },
-            { width: 1200, crop: 'limit' },
+            { quality: "auto", fetch_format: "auto" },
+            { width: 1200, crop: "limit" },
         ],
     };
     // 3. Unsigned Mode (無 API Key，必須有 Preset)
     if (!hasApiKey && uploadPreset) {
         // Unsigned upload 只支援 file path (string)，不支援 stream upload
-        if (typeof file !== 'string') {
-            throw new Error('Unsigned upload only supports file paths. Please provide a file path string.');
+        if (typeof file !== "string") {
+            throw new Error("Unsigned upload only supports file paths. Please provide a file path string.");
         }
         return cloudinary.uploader.unsigned_upload(file, uploadPreset, options);
     }
@@ -54,12 +53,10 @@ export async function uploadToCloudinary(file) {
             return;
         }
         // B. 處理檔案路徑 (String)
-        if (typeof file === 'string') {
-            cloudinary.uploader.upload(file, options)
-                .then(resolve)
-                .catch(reject);
+        if (typeof file === "string") {
+            cloudinary.uploader.upload(file, options).then(resolve).catch(reject);
             return;
         }
-        reject(new Error('Invalid file type. Must be string (path) or Buffer.'));
+        reject(new Error("Invalid file type. Must be string (path) or Buffer."));
     });
 }

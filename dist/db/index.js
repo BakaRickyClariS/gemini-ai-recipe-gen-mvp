@@ -4,8 +4,9 @@
  */
 import pkg from "pg";
 const { Pool } = pkg;
-// 從環境變數讀取連線字串
-const connectionString = process.env.DATABASE_URL;
+import { config } from "../config/unifiedConfig.js";
+// 從 unifiedConfig 讀取連線字串
+const connectionString = config.database.url;
 if (!connectionString) {
     console.warn("⚠️ [DB] DATABASE_URL 未設定，資料庫功能將無法使用");
 }

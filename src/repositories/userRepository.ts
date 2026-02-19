@@ -36,6 +36,26 @@ export const userRepository = {
     return result[0] || null;
   },
 
+  async findByEmail(email: string) {
+    const result = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+    return result[0] || null;
+  },
+
+  async create(data: {
+    id: string;
+    displayName: string;
+    email: string;
+    passwordHash: string;
+    avatar?: string;
+  }) {
+    const [created] = await db.insert(users).values(data).returning();
+    return created;
+  },
+
   async upsert(
     id: string,
     data: {

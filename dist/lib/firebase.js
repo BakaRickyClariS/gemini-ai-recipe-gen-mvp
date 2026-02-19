@@ -1,14 +1,10 @@
 import admin from "firebase-admin";
 import { createRequire } from "module";
+import { config } from "../config/unifiedConfig.js";
 const require = createRequire(import.meta.url);
-// 使用 require 載入 JSON 檔案，避免 ESM JSON import 相容性問題
-// 假設 service-account-file.json 位於專案根目錄 (即 src/lib/../../)
-// 如果檔案不存在，這裡會拋出錯誤，這也是預期的，提醒使用者放檔案
 let serviceAccount;
-// 1. 優先嘗試從環境變數讀取 (適用於 Vercel)
-// 支援兩種常見命名：FIREBASE_SERVICE_ACCOUNT 或 FIREBASE_SERVICE_ACCOUNT_KEY
-const envServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT ||
-    process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+// 1. 優先從 unifiedConfig 讀取（來自環境變數，適用於 Vercel）
+const envServiceAccount = config.firebase.serviceAccountKey;
 if (envServiceAccount) {
     try {
         serviceAccount = JSON.parse(envServiceAccount);

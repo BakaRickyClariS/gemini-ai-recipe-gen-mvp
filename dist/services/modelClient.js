@@ -13,7 +13,7 @@ export const MODEL_PRIORITY = {
         "gemini-3-flash",
         "gemini-2.5-flash-lite",
         "gemini-1.5-flash",
-        "gemini-1.5-pro"
+        "gemini-1.5-pro",
     ],
     // 影像分析：主力 (User Pref) → Stable
     vision: [
@@ -21,37 +21,24 @@ export const MODEL_PRIORITY = {
         "gemini-2.5-flash",
         "gemini-3-flash",
         "gemini-1.5-flash",
-        "gemini-1.5-pro"
+        "gemini-1.5-pro",
     ],
     // 文字生成：主力 (User Pref) → Stable
     text: [
         "gemini-2.5-flash",
         "gemini-3-flash",
         "gemini-1.5-flash",
-        "gemini-1.5-pro"
+        "gemini-1.5-pro",
     ],
 };
+import { getGeminiKeys } from "../config/unifiedConfig.js";
 // ===== API Key 管理 =====
 /**
  * 取得所有可用的 API Keys
- * 支援格式：
- * - GEMINI_API_KEY 或 GOOGLE_API_KEY（單一 key）
- * - GEMINI_API_KEY_1, GEMINI_API_KEY_2, ...（多個 keys）
+ * 使用 unifiedConfig 集中管理
  */
 const getApiKeys = () => {
-    const keys = [];
-    // 主要 API Key
-    const primaryKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (primaryKey) {
-        keys.push(primaryKey);
-    }
-    // 額外的 API Keys (GEMINI_API_KEY_1, GEMINI_API_KEY_2, ...)
-    for (let i = 1; i <= 10; i++) {
-        const key = process.env[`GEMINI_API_KEY_${i}`];
-        if (key && !keys.includes(key)) {
-            keys.push(key);
-        }
-    }
+    const keys = getGeminiKeys();
     if (keys.length === 0) {
         throw new Error("Missing GEMINI_API_KEY or GOOGLE_API_KEY");
     }

@@ -5,10 +5,11 @@
  */
 import { GoogleGenAI } from "@google/genai";
 import { uploadToCloudinary } from "./mediaService.js";
+import { config } from "../config/unifiedConfig.js";
 const IMAGE_MODEL = "gemini-2.0-flash-exp-image-generation";
 // ===== 輔助函式 =====
 const getImageClient = () => {
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const apiKey = config.gemini.apiKey;
     if (!apiKey) {
         throw new Error("Missing GEMINI_API_KEY or GOOGLE_API_KEY");
     }
@@ -76,7 +77,13 @@ const generateImageWithGemini = async (recipeName, category) => {
     };
     const containerStyle = containerStyleCN[category] || "放在精緻的陶瓷盤中";
     // 加入隨機特徵以避免快取重複
-    const randomFeatures = ["柔和光線", "自然光", "溫暖氛圍", "明亮風格", "高對比度"][Math.floor(Math.random() * 5)];
+    const randomFeatures = [
+        "柔和光線",
+        "自然光",
+        "溫暖氛圍",
+        "明亮風格",
+        "高對比度",
+    ][Math.floor(Math.random() * 5)];
     const prompt = `a.核心-->${recipeName}主體、${containerStyle}、盤子周圍放1-2個相關材料擺設或餐具
 b.風格-->食物攝影形象照、${category}風格、深色木紋背景、${randomFeatures}、清新、俯視特寫、(unique_id_${Date.now()})`;
     const response = await ai.models.generateContent({
@@ -114,7 +121,7 @@ b.風格-->食物攝影形象照、${category}風格、深色木紋背景、${ra
  */
 const getUnsplashImage = async (recipeName, category) => {
     try {
-        const accessKey = process.env.UNSPLASH_ACCESS_KEY;
+        const accessKey = config.unsplash.accessKey;
         const categoryEn = getCategoryInEnglish(category);
         // 組合更具體的搜尋詞：料理類型 (英文) + 食譜名稱
         // 雖然食譜名稱是中文，但 Unsplash 的標籤系統有時能識別中文關鍵字
@@ -154,7 +161,8 @@ export const generateRecipeImage = async (recipeName, category) => {
         }
     }
     catch (err) {
-        console.warn(`[ImageGen] Gemini failed: ${err.message}`);
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[ImageGen] Gemini failed: ${message}`);
     }
     // Gemini 失敗，使用 Pollinations.ai 備用方案
     try {
@@ -168,7 +176,8 @@ export const generateRecipeImage = async (recipeName, category) => {
         return { url: uploadResult.secure_url };
     }
     catch (err) {
-        console.warn(`[ImageGen] Pollinations or Cloudinary upload failed: ${err.message}`);
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[ImageGen] Pollinations or Cloudinary upload failed: ${message}`);
     }
     // 第三備用方案：Unsplash (搜尋真實照片)
     try {
@@ -181,7 +190,8 @@ export const generateRecipeImage = async (recipeName, category) => {
         }
     }
     catch (unsplashErr) {
-        console.error("[ImageGen] All fallbacks failed:", unsplashErr.message);
+        const message = unsplashErr instanceof Error ? unsplashErr.message : String(unsplashErr);
+        console.error("[ImageGen] All fallbacks failed:", message);
     }
     return null;
 };
@@ -215,7 +225,8 @@ export const generateRecipeImages = async (recipes) => {
                 }
             }
             catch (uploadErr) {
-                console.error(`[ImageGen] Cloudinary upload failed: ${uploadErr.message}`);
+                const message = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
+                console.error(`[ImageGen] Cloudinary upload failed: ${message}`);
                 // 如果上傳失敗，嘗試回傳原始 Base64 作為備用（雖然這在大流量下不理想）
                 if ("base64" in imageData) {
                     return {

@@ -2,7 +2,8 @@
  * 安全日誌服務
  * 負責記錄 AI 相關的安全事件，如 Injection 嘗試、Rate Limit 觸發等
  */
-const LOG_LEVEL = process.env.AI_SECURITY_LOG_LEVEL || "warn";
+import { config } from "../config/unifiedConfig.js";
+const LOG_LEVEL = config.ai.securityLogLevel;
 /**
  * 記錄安全事件
  * 目前輸出到 console，生產環境可整合至外部監控系統 (Sentry, Datadog 等)
