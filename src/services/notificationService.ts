@@ -1,5 +1,6 @@
 import { messaging } from "../lib/firebase.js";
 import { query } from "../db/index.js";
+import * as Sentry from "@sentry/node";
 
 interface NotificationSettings {
   notifyPush: boolean;
@@ -19,7 +20,7 @@ export const notificationService = {
   registerToken: async (
     userId: string,
     token: string,
-    platform: string = "web"
+    platform: string = "web",
   ) => {
     // 確保使用者存在
     const ensureUserSql = `
@@ -101,7 +102,7 @@ export const notificationService = {
    */
   updateSettings: async (
     userId: string,
-    settings: Partial<NotificationSettings>
+    settings: Partial<NotificationSettings>,
   ) => {
     // 構建動態更新 SQL
     // 先確保使用者存在 (如果是第一次只想改設定但沒 Token，也應該要有 User 紀錄)
@@ -149,7 +150,7 @@ export const notificationService = {
     userId: string,
     page = 1,
     limit = 20,
-    category?: string
+    category?: string,
   ) => {
     const offset = (page - 1) * limit;
 
@@ -174,12 +175,8 @@ export const notificationService = {
     let sql = `
       SELECT 
         n.id, n.category, n.type, n.sub_type, n.title, n.message, n.is_read, n.action_type, n.action_payload, n.created_at,
-        n.actor_id,
-        COALESCE(n.group_name, r.name) as group_name,
-        COALESCE(n.actor_name, u.display_name) as actor_name
+        n.actor_id, n.group_name, n.actor_name
       FROM notifications n
-      LEFT JOIN refrigerators r ON (n.action_payload::json->>'refrigeratorId') = r.id::text
-      LEFT JOIN users u ON (n.action_payload::json->>'actorId') = u.id OR (n.action_payload::json->>'operatorId') = u.id
       WHERE n.user_id = $1
     `;
     let params: any[] = [userId];
@@ -195,24 +192,90 @@ export const notificationService = {
 
     const result = await query(sql, params);
 
+    // 取得關聯的 IDs (避免在 SQL 裡解析 JSON 發生錯誤)
+    const refIds = new Set<string>();
+    const userIdsToFetch = new Set<string>();
+
+    const parsedNotifications = result.rows.map((row: any) => {
+      let payloadObj: any = null;
+      if (
+        row.action_payload &&
+        typeof row.action_payload === "string" &&
+        row.action_payload.startsWith("{")
+      ) {
+        try {
+          payloadObj = JSON.parse(row.action_payload);
+          if (payloadObj.refrigeratorId)
+            refIds.add(String(payloadObj.refrigeratorId));
+          if (payloadObj.actorId)
+            userIdsToFetch.add(String(payloadObj.actorId));
+          if (payloadObj.operatorId)
+            userIdsToFetch.add(String(payloadObj.operatorId));
+        } catch (e) {
+          // ignore parsing error
+        }
+      }
+      return { ...row, payloadObj };
+    });
+
+    // 批次查詢關聯資料
+    const refrigeratorsMap = new Map<string, string>();
+    const usersMap = new Map<string, string>();
+
+    if (refIds.size > 0) {
+      const refsResult = await query(
+        `SELECT id, name FROM refrigerators WHERE id = ANY($1::uuid[])`,
+        [Array.from(refIds)],
+      );
+      refsResult.rows.forEach((r: any) =>
+        refrigeratorsMap.set(String(r.id), r.name),
+      );
+    }
+
+    if (userIdsToFetch.size > 0) {
+      const usersResult = await query(
+        `SELECT id, display_name FROM users WHERE id = ANY($1)`,
+        [Array.from(userIdsToFetch)],
+      );
+      usersResult.rows.forEach((u: any) =>
+        usersMap.set(String(u.id), u.display_name),
+      );
+    }
+
     // 轉換成前端易讀格式
-    const notifications = result.rows.map((row) => ({
-      id: row.id,
-      category: row.category || "system",
-      type: row.type,
-      subType: row.sub_type,
-      title: row.title,
-      message: row.message,
-      isRead: row.is_read,
-      action: {
-        type: row.action_type,
-        payload: row.action_payload,
-      },
-      createdAt: row.created_at,
-      groupName: row.group_name,
-      actorName: row.actor_name,
-      actorId: row.actor_id,
-    }));
+    const notifications = parsedNotifications.map((row: any) => {
+      let groupName = row.group_name;
+      let actorName = row.actor_name;
+
+      if (!groupName && row.payloadObj?.refrigeratorId) {
+        groupName =
+          refrigeratorsMap.get(String(row.payloadObj.refrigeratorId)) || null;
+      }
+      if (!actorName && row.payloadObj) {
+        actorName =
+          usersMap.get(String(row.payloadObj.actorId)) ||
+          usersMap.get(String(row.payloadObj.operatorId)) ||
+          null;
+      }
+
+      return {
+        id: row.id,
+        category: row.category || "system",
+        type: row.type,
+        subType: row.sub_type,
+        title: row.title,
+        message: row.message,
+        isRead: row.is_read,
+        action: {
+          type: row.action_type,
+          payload: row.action_payload, // front-end receives raw string or json object depending on original implementation
+        },
+        createdAt: row.created_at,
+        groupName: groupName,
+        actorName: actorName,
+        actorId: row.actor_id,
+      };
+    });
 
     return { notifications, total, unreadCount };
   },
@@ -233,7 +296,7 @@ export const notificationService = {
     subType?: string,
     groupName?: string,
     actorName?: string,
-    actorId?: string
+    actorId?: string,
   ) => {
     // 1. 自動映射分類 (Mapping logic based on extension spec)
     let finalCategory = category;
@@ -293,7 +356,7 @@ export const notificationService = {
     // 取得使用者所有裝置的 Token
     const tokens = await notificationService.getUserTokens(userId);
     console.log(
-      `[Notification] User ${userId}: ${tokens.length} FCM tokens found, notify_push=${user.notify_push}`
+      `[Notification] User ${userId}: ${tokens.length} FCM tokens found, notify_push=${user.notify_push}`,
     );
 
     const shouldSendPush = user.notify_push !== false && tokens.length > 0;
@@ -305,14 +368,14 @@ export const notificationService = {
 
     if (!shouldPush) {
       console.log(
-        `[Notification] Skipping FCM for user ${userId}: shouldSendPush=${shouldSendPush}, type=${type}, notify_expiry=${user.notify_expiry}`
+        `[Notification] Skipping FCM for user ${userId}: shouldSendPush=${shouldSendPush}, type=${type}, notify_expiry=${user.notify_expiry}`,
       );
     }
 
     if (shouldPush && tokens.length > 0) {
       const failedTokens: string[] = [];
       console.log(
-        `[Notification] Sending FCM to ${tokens.length} devices for user ${userId}`
+        `[Notification] Sending FCM to ${tokens.length} devices for user ${userId}`,
       );
 
       for (const token of tokens) {
@@ -324,15 +387,24 @@ export const notificationService = {
               type,
               actionType: actionType || "",
               actionId: action?.payload?.id || "",
+              subType: subType || "",
+              groupName: groupName || "",
+              actorName: actorName || "",
+              actorId: actorId || "",
+              refrigeratorId: action?.payload?.refrigeratorId || "",
             },
           });
           console.log(
             `[Notification] FCM sent successfully to token: ${token.substring(
               0,
-              20
-            )}...`
+              20,
+            )}...`,
           );
         } catch (error: any) {
+          Sentry.captureException(error, {
+            tags: { service: "fcm", userId },
+            extra: { type, subType, tokenPrefix: token.substring(0, 20) },
+          });
           console.error("[Notification] FCM Send Error:", error);
           // 如果 token 失效，從 fcm_tokens 表刪除
           if (error.code === "messaging/registration-token-not-registered") {
@@ -350,7 +422,7 @@ export const notificationService = {
         console.log(
           `[Notification] Push sent to user ${userId} (${
             tokens.length - failedTokens.length
-          }/${tokens.length} devices)`
+          }/${tokens.length} devices)`,
         );
       }
     }
@@ -368,7 +440,7 @@ export const notificationService = {
     subType?: string,
     groupName?: string,
     actorName?: string,
-    actorId?: string
+    actorId?: string,
   ) => {
     const results = {
       success: [] as string[],
@@ -387,7 +459,7 @@ export const notificationService = {
           subType,
           groupName,
           actorName,
-          actorId
+          actorId,
         );
         results.success.push(userId);
       } catch (error) {
@@ -412,13 +484,13 @@ export const notificationService = {
     operatorId?: string,
     subType?: string,
     actorName?: string,
-    passedGroupName?: string // [NEW] Allow caller to pass groupName
+    passedGroupName?: string, // [NEW] Allow caller to pass groupName
   ) => {
     // 1. 找出該冰箱的所有成員
     // [MODIFIED] Using user_refrigerators based on migration for better reliability
     const membersResult = await query(
       `SELECT user_id FROM user_refrigerators WHERE refrigerator_id = $1`,
-      [refrigeratorId]
+      [refrigeratorId],
     );
 
     let memberIds = membersResult.rows.map((row) => row.user_id);
@@ -431,7 +503,7 @@ export const notificationService = {
       try {
         const fridgeResult = await query(
           `SELECT name FROM refrigerators WHERE id = $1`,
-          [refrigeratorId]
+          [refrigeratorId],
         );
         if (fridgeResult.rows.length > 0) {
           groupName = fridgeResult.rows[0].name;
@@ -439,7 +511,7 @@ export const notificationService = {
       } catch (e) {
         console.warn(
           `[Notification] Failed to fetch group name for ${refrigeratorId}`,
-          e
+          e,
         );
       }
     }
@@ -452,14 +524,14 @@ export const notificationService = {
     // 如果還是沒有成員
     if (memberIds.length === 0) {
       console.warn(
-        `[Notification] No members found for refrigerator ${refrigeratorId}. Broadcast skipped.`
+        `[Notification] No members found for refrigerator ${refrigeratorId}. Broadcast skipped.`,
       );
       return;
     }
 
     console.log(
       `[Notification] Broadcasting to refrigerator ${refrigeratorId} members:`,
-      memberIds
+      memberIds,
     );
 
     // 2. 逐一發送
@@ -475,12 +547,12 @@ export const notificationService = {
           subType,
           groupName,
           actorName,
-          operatorId || "system"
+          operatorId || "system",
         );
       } catch (error) {
         console.error(
           `[Notification] Failed to send group notification to ${memberId}:`,
-          error
+          error,
         );
       }
     }
@@ -495,7 +567,7 @@ export const notificationService = {
   batchMarkAsRead: async (
     userId: string,
     ids: string[],
-    isRead: boolean = true
+    isRead: boolean = true,
   ) => {
     if (ids.length === 0) return { updatedCount: 0 };
 
@@ -532,7 +604,7 @@ export const notificationService = {
     message: string,
     type: string = "announcement",
     shouldPush: boolean = true,
-    data: any = {}
+    data: any = {},
   ) => {
     // 1. 取得所有有效使用者 (有 FCM Token 或最近有活動的可以用來過濾，這裡先簡單全部)
     // 為了效能，我們直接從 users 表撈 ID
@@ -572,7 +644,7 @@ export const notificationService = {
     ]);
 
     console.log(
-      `[Announcement] DB inserted ${insertResult.rowCount} notifications.`
+      `[Announcement] DB inserted ${insertResult.rowCount} notifications.`,
     );
 
     // 3. 處理推送 (Topic Messaging or Batch Multicast)
@@ -586,7 +658,7 @@ export const notificationService = {
 
       if (allTokens.length > 0) {
         console.log(
-          `[Announcement] Broadcasting FCM to ${allTokens.length} devices.`
+          `[Announcement] Broadcasting FCM to ${allTokens.length} devices.`,
         );
 
         // FCM multicast limit is 500 per batch
@@ -604,7 +676,7 @@ export const notificationService = {
               },
             });
             console.log(
-              `[Announcement] Batch ${Math.floor(i / batchSize) + 1} sent.`
+              `[Announcement] Batch ${Math.floor(i / batchSize) + 1} sent.`,
             );
           } catch (err) {
             console.error(`[Announcement] Batch send error:`, err);
