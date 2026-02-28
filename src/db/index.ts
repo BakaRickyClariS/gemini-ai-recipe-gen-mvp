@@ -24,7 +24,7 @@ export const pool = connectionString
       },
       max: 10, // 最大連線數
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: 10000,
     })
   : null;
 

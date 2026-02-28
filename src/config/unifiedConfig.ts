@@ -56,7 +56,10 @@ export const config = {
 
   cookie: {
     secure: optionalEnv("NODE_ENV") === "production",
-    sameSite: "none" as const,
+    sameSite:
+      optionalEnv("NODE_ENV") === "production"
+        ? ("none" as const)
+        : ("lax" as const),
     httpOnly: true,
   },
 

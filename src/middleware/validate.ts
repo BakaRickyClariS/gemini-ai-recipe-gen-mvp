@@ -9,6 +9,13 @@ import { z } from "zod";
 export function validate(schema: z.ZodSchema) {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
+      console.log(
+        `[Validate] Path: ${req.path}, Content-Type: ${req.headers["content-type"]}`,
+      );
+      console.log(
+        `[Validate] req.body type: ${typeof req.body}, body:`,
+        req.body,
+      );
       req.body = schema.parse(req.body);
       next();
     } catch (error) {

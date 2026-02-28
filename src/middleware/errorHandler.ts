@@ -30,7 +30,7 @@ export class AIRecipeError extends Error {
   constructor(
     code: AIErrorCode,
     details?: Record<string, unknown>,
-    customMessage?: string
+    customMessage?: string,
   ) {
     const errorDef = AIErrorCodes[code];
     super(customMessage || errorDef.message);
@@ -56,21 +56,15 @@ export function aiRecipeErrorHandler(
   err: Error,
   _req: Request,
   res: Response,
-  _next: NextFunction
+  next: NextFunction,
 ): void {
   if (err instanceof AIRecipeError) {
     res.status(err.httpStatus).json(err.toResponse());
     return;
   }
 
-  // 未預期的錯誤
-  console.error("[AI Recipe Error]", err);
-  res.status(500).json({
-    code: "AI_005",
-    message: "AI 服務暫時無法使用",
-    details: { originalError: err.message },
-    timestamp: new Date().toISOString(),
-  } satisfies AIRecipeErrorResponse);
+  // 若不是 AI 專屬錯誤，交給下一個 global error handler 處理 (e.g. ApiError)
+  next(err);
 }
 
 // ===== 驗證中介層 =====
@@ -83,7 +77,7 @@ const PROMPT_MAX_LENGTH = 4000;
 export function validateAIRecipeRequest(
   req: Request,
   _res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void {
   const prompt = req.body?.prompt;
 
@@ -96,7 +90,7 @@ export function validateAIRecipeRequest(
       new AIRecipeError("AI_002", {
         maxLength: PROMPT_MAX_LENGTH,
         actualLength: prompt.length,
-      })
+      }),
     );
   }
 
