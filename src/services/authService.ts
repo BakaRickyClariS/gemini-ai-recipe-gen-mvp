@@ -96,6 +96,16 @@ export const authService = {
       profilePictureUrl: profile.pictureUrl,
     });
 
+    // --- Ensure default group exists ---
+    const { groupRepository } =
+      await import("../repositories/groupRepository.js");
+    const { groupService } = await import("./groupService.js");
+    const groups = await groupRepository.findByUserId(user.id);
+    if (!groups || groups.length === 0) {
+      await groupService.create("我的冰箱", user.id);
+    }
+    // ------------------------------------
+
     // 4. Sign JWT tokens
     const accessToken = this.signAccessToken({ userId: user.id });
     const refreshToken = this.signRefreshToken({ userId: user.id });
@@ -186,6 +196,11 @@ export const authService = {
         input.displayName,
       )}&background=random`,
     });
+
+    // --- Ensure default group exists ---
+    const { groupService } = await import("./groupService.js");
+    await groupService.create("我的冰箱", user.id);
+    // ------------------------------------
 
     // 4. Sign tokens
     const accessToken = this.signAccessToken({ userId: user.id });

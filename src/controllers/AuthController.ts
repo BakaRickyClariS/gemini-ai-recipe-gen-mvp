@@ -26,6 +26,15 @@ export class AuthController extends BaseController {
     }
   }
 
+  /** GET /api/v2/auth/csrf-token */
+  async getCsrfToken(req: Request, res: Response): Promise<void> {
+    try {
+      this.handleSuccess(res, { csrfToken: req.csrfToken });
+    } catch (error) {
+      this.handleError(error, res, "AuthController.getCsrfToken");
+    }
+  }
+
   /** GET /api/v2/auth/line/callback */
   async lineCallback(req: Request, res: Response): Promise<void> {
     try {
@@ -53,14 +62,13 @@ export class AuthController extends BaseController {
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       });
 
-      this.handleSuccess(res, {
-        user: {
-          id: user.id,
-          displayName: user.displayName,
-          profilePictureUrl: user.profilePictureUrl,
-        },
-        accessToken,
-      });
+      // 成功登入後跳轉回前端
+      const isLocal =
+        req.hostname === "localhost" || req.hostname === "127.0.0.1";
+      const baseUrl =
+        process.env.FRONTEND_URL ||
+        (isLocal ? "http://localhost:5173" : config.cors.origins[0]);
+      res.redirect(`${baseUrl}/inventory`);
     } catch (error) {
       this.handleError(error, res, "AuthController.lineCallback");
     }
