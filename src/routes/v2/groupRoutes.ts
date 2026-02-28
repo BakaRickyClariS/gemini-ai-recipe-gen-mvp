@@ -11,6 +11,7 @@ import {
   updateGroupSchema,
   joinGroupSchema,
 } from "../../validators/groupSchemas.js";
+import { verifyGroupMembership } from "../../middleware/groupMembership.js";
 
 const router = Router();
 const controller = new GroupController();
@@ -20,24 +21,40 @@ router.get("/", jwtAuth, (req, res) => controller.list(req, res));
 router.post("/", jwtAuth, validate(createGroupSchema), (req, res) =>
   controller.create(req, res),
 );
-router.get("/:id", jwtAuth, (req, res) => controller.getById(req, res));
-router.put("/:id", jwtAuth, validate(updateGroupSchema), (req, res) =>
-  controller.update(req, res),
+router.get("/:id", jwtAuth, verifyGroupMembership("id"), (req, res) =>
+  controller.getById(req, res),
 );
-router.delete("/:id", jwtAuth, (req, res) => controller.delete(req, res));
+router.put(
+  "/:id",
+  jwtAuth,
+  verifyGroupMembership("id"),
+  validate(updateGroupSchema),
+  (req, res) => controller.update(req, res),
+);
+router.delete("/:id", jwtAuth, verifyGroupMembership("id"), (req, res) =>
+  controller.delete(req, res),
+);
 
 // Invitations
-router.post("/:id/invitations", jwtAuth, (req, res) =>
-  controller.createInvitation(req, res),
+router.post(
+  "/:id/invitations",
+  jwtAuth,
+  verifyGroupMembership("id"),
+  (req, res) => controller.createInvitation(req, res),
 );
 router.post("/join", jwtAuth, validate(joinGroupSchema), (req, res) =>
   controller.join(req, res),
 );
 
 // Members
-router.delete("/:id/members/:memberId", jwtAuth, (req, res) =>
-  controller.removeMember(req, res),
+router.delete(
+  "/:id/members/:memberId",
+  jwtAuth,
+  verifyGroupMembership("id"),
+  (req, res) => controller.removeMember(req, res),
 );
-router.delete("/:id/leave", jwtAuth, (req, res) => controller.leave(req, res));
+router.delete("/:id/leave", jwtAuth, verifyGroupMembership("id"), (req, res) =>
+  controller.leave(req, res),
+);
 
 export default router;

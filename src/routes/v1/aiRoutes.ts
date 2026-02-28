@@ -24,6 +24,7 @@ import {
   optionalCookieAuth,
   type AuthenticatedRequest,
 } from "../../middleware/cookieAuth.js";
+import { notificationService } from "../../services/notificationService.js";
 
 const router = Router();
 
@@ -57,6 +58,35 @@ router.post(
 
       const response = await generateMultipleRecipes(request, userId);
       res.json(response);
+
+      // Fire-and-forget: #12 AI 食譜完成通知（個人）
+      if (userId !== "anonymous" && response?.data) {
+        const recipes = Array.isArray(response.data)
+          ? response.data
+          : [response.data];
+        const firstName = recipes[0]?.name || "新食譜";
+        const count = recipes.length;
+        const title =
+          count > 1
+            ? `阿福靈感大爆發！${count} 道新食譜出爐`
+            : `阿福靈感大爆發！新食譜出爐`;
+        const body =
+          count > 1
+            ? `冰箱小隊為您獻上 ${firstName} 等 ${count} 道料理靈感！`
+            : `冰箱小隊為您獻上今日料理靈感：${firstName}`;
+
+        notificationService
+          .send(
+            userId,
+            title,
+            body,
+            "recipe",
+            { type: "recipe", payload: { recipeId: recipes[0]?.id } },
+            "inspiration",
+            "generate",
+          )
+          .catch((e) => console.error("[Notification] AI recipe error:", e));
+      }
     } catch (err) {
       next(err);
     }
@@ -113,41 +143,45 @@ router.get("/recipe/suggestions", (_req, res) => {
 // ===== 媒體上傳 =====
 
 /** POST /media/upload — 上傳到 Cloudinary */
-router.post("/media/upload", upload.single("file"), async (req, res) => {
-  if (!req.file) {
-    res.status(400).json({
-      success: false,
-      code: "MEDIA_001",
-      message: "未提供檔案",
-    });
-    return;
-  }
-
-  try {
-    const result = await uploadToCloudinary(req.file.path);
-
-    try {
-      fs.unlinkSync(req.file.path);
-    } catch {
-      console.warn(`[WARN] 無法刪除暫存檔: ${req.file.path}`);
+router.post(
+  ["/media/upload", "/upload"],
+  upload.single("file"),
+  async (req, res) => {
+    if (!req.file) {
+      res.status(400).json({
+        success: false,
+        code: "MEDIA_001",
+        message: "未提供檔案",
+      });
+      return;
     }
 
-    res.json({
-      success: true,
-      data: { url: result.secure_url, publicId: result.public_id },
-    });
-  } catch (error: unknown) {
-    Sentry.captureException(error);
-    const message = error instanceof Error ? error.message : "上傳失敗";
-    console.error("Upload error:", error);
-    res.status(500).json({
-      success: false,
-      code: "MEDIA_005",
-      message: "上傳失敗",
-      details: message,
-    });
-  }
-});
+    try {
+      const result = await uploadToCloudinary(req.file.path);
+
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch {
+        console.warn(`[WARN] 無法刪除暫存檔: ${req.file.path}`);
+      }
+
+      res.json({
+        success: true,
+        data: { url: result.secure_url, publicId: result.public_id },
+      });
+    } catch (error: unknown) {
+      Sentry.captureException(error);
+      const message = error instanceof Error ? error.message : "上傳失敗";
+      console.error("Upload error:", error);
+      res.status(500).json({
+        success: false,
+        code: "MEDIA_005",
+        message: "上傳失敗",
+        details: message,
+      });
+    }
+  },
+);
 
 // ===== 影像辨識 =====
 

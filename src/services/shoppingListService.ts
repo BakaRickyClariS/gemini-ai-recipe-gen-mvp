@@ -6,6 +6,14 @@ import { shoppingListRepository } from "../repositories/shoppingListRepository.j
 import { groupRepository } from "../repositories/groupRepository.js";
 import { ApiError } from "../errors/ApiError.js";
 
+const formatItem = (item: any) => {
+  if (!item) return item;
+  return {
+    ...item,
+    creator_id: item.addedBy,
+  };
+};
+
 export const shoppingListService = {
   async listByGroup(groupId: string, userId: string) {
     const isMember = await groupRepository.isMember(groupId, userId);
@@ -43,7 +51,7 @@ export const shoppingListService = {
     if (!isMember) throw ApiError.forbidden("Not a member");
 
     const items = await shoppingListRepository.getItems(id);
-    return { ...list, items };
+    return { ...list, items: items.map(formatItem) };
   },
 
   async update(id: string, userId: string, data: any) {
@@ -77,7 +85,8 @@ export const shoppingListService = {
     const isMember = await groupRepository.isMember(list.groupId, userId);
     if (!isMember) throw ApiError.forbidden("Not a member");
 
-    return shoppingListRepository.getItems(listId);
+    const items = await shoppingListRepository.getItems(listId);
+    return items.map(formatItem);
   },
 
   async createItem(
@@ -96,7 +105,7 @@ export const shoppingListService = {
     const isMember = await groupRepository.isMember(list.groupId, userId);
     if (!isMember) throw ApiError.forbidden("Not a member");
 
-    return shoppingListRepository.createItem({
+    const item = await shoppingListRepository.createItem({
       shoppingListId: listId,
       name: data.name,
       quantity: data.quantity?.toString(),
@@ -104,6 +113,7 @@ export const shoppingListService = {
       photoPath: data.photoPath,
       addedBy: userId,
     });
+    return formatItem(item);
   },
 
   async updateItem(itemId: string, userId: string, data: any) {
@@ -120,7 +130,8 @@ export const shoppingListService = {
     if (data.quantity !== undefined)
       updateData.quantity = data.quantity?.toString() ?? null;
 
-    return shoppingListRepository.updateItem(itemId, updateData);
+    const updated = await shoppingListRepository.updateItem(itemId, updateData);
+    return formatItem(updated);
   },
 
   async deleteItem(itemId: string, userId: string) {

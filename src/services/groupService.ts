@@ -10,7 +10,13 @@ import { ApiError } from "../errors/ApiError.js";
 
 export const groupService = {
   async listByUser(userId: string) {
-    return groupRepository.findByUserId(userId);
+    let groups = await groupRepository.findByUserId(userId);
+    if (!groups || groups.length === 0) {
+      // Auto-create a default group if the user has none
+      await this.create("我的冰箱", userId);
+      groups = await groupRepository.findByUserId(userId);
+    }
+    return groups;
   },
 
   async getById(id: string, userId: string) {

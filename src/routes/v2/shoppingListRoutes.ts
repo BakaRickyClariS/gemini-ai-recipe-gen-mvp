@@ -12,17 +12,22 @@ import {
   createShoppingListItemSchema,
   updateShoppingListItemSchema,
 } from "../../validators/shoppingListSchemas.js";
+import { verifyGroupMembership } from "../../middleware/groupMembership.js";
 
 const router = Router();
 const controller = new ShoppingListController();
 
 // List CRUD via group
-router.get("/groups/:groupId/shopping-lists", jwtAuth, (req, res) =>
-  controller.listByGroup(req, res),
+router.get(
+  "/groups/:groupId/shopping-lists",
+  jwtAuth,
+  verifyGroupMembership("groupId"),
+  (req, res) => controller.listByGroup(req, res),
 );
 router.post(
   "/groups/:groupId/shopping-lists",
   jwtAuth,
+  verifyGroupMembership("groupId"),
   validate(createShoppingListSchema),
   (req, res) => controller.create(req, res),
 );
