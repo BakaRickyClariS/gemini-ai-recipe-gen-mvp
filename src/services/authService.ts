@@ -33,9 +33,26 @@ interface LineProfile {
   statusMessage?: string;
 }
 
+/**
+ * 從 LINE id_token (JWT) 解碼取得 email（不驗簽，只取 payload）
+ * email scope 需在 LINE Developers Console 申請，未申請時回傳 undefined
+ */
+function extractEmailFromIdToken(idToken: string): string | undefined {
+  try {
+    const parts = idToken.split(".");
+    if (parts.length < 2) return undefined;
+    const payload = JSON.parse(
+      Buffer.from(parts[1], "base64url").toString("utf-8"),
+    );
+    return typeof payload.email === "string" ? payload.email : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export const authService = {
   /**
-   * 產生 LINE OAuth 授權 URL
+   * 產生 LINE OAuth 授權 URL（含 email scope）
    */
   getLineAuthUrl(state?: string): string {
     if (!config.line.channelId || !config.line.redirectUri) {
@@ -47,16 +64,16 @@ export const authService = {
       client_id: config.line.channelId,
       redirect_uri: config.line.redirectUri,
       state: state || crypto.randomUUID(),
-      scope: "profile openid",
+      scope: "profile openid email",
     });
 
     return `${LINE_AUTH_URL}?${params.toString()}`;
   },
 
   /**
-   * LINE OAuth callback：用 code 換 token → 取 profile → upsert user → 簽 JWT
+   * LINE OAuth callback：用 code 換 token → 取 profile → account linking → 簽 JWT
    */
-  async handleLineCallback(code: string) {
+  async handleLineCallback(code: string, state?: string) {
     // 1. Exchange code for token
     const tokenResponse = await fetch(LINE_TOKEN_URL, {
       method: "POST",
@@ -89,14 +106,19 @@ export const authService = {
 
     const profile: LineProfile = await profileResponse.json();
 
-    // 3. Upsert user
-    const user = await userRepository.upsert(profile.userId, {
+    // 3. Try to extract email from id_token (optional, requires email scope approval)
+    const email = tokenData.id_token
+      ? extractEmailFromIdToken(tokenData.id_token)
+      : undefined;
+
+    // 4. Account linking: find by lineUserId → find by email → create new
+    const user = await userRepository.upsertByLineId(profile.userId, {
       displayName: profile.displayName,
-      lineUserId: profile.userId,
       profilePictureUrl: profile.pictureUrl,
+      email,
     });
 
-    // --- Ensure default group exists ---
+    // 5. Ensure default group exists
     const { groupRepository } =
       await import("../repositories/groupRepository.js");
     const { groupService } = await import("./groupService.js");
@@ -104,9 +126,8 @@ export const authService = {
     if (!groups || groups.length === 0) {
       await groupService.create("我的冰箱", user.id);
     }
-    // ------------------------------------
 
-    // 4. Sign JWT tokens
+    // 6. Sign JWT tokens
     const accessToken = this.signAccessToken({ userId: user.id });
     const refreshToken = this.signRefreshToken({ userId: user.id });
 
@@ -197,12 +218,11 @@ export const authService = {
       )}&background=random`,
     });
 
-    // --- Ensure default group exists ---
+    // 4. Ensure default group exists
     const { groupService } = await import("./groupService.js");
     await groupService.create("我的冰箱", user.id);
-    // ------------------------------------
 
-    // 4. Sign tokens
+    // 5. Sign tokens
     const accessToken = this.signAccessToken({ userId: user.id });
     const refreshToken = this.signRefreshToken({ userId: user.id });
 
