@@ -151,6 +151,7 @@ export const notificationService = {
     page = 1,
     limit = 20,
     category?: string,
+    version: "v1" | "v2" = "v1",
   ) => {
     const offset = (page - 1) * limit;
 
@@ -159,8 +160,14 @@ export const notificationService = {
     let countParams: any[] = [userId];
 
     if (category) {
-      countSql += ` AND category = $2`;
-      countParams.push(category);
+      if (version === "v2" && category === "stock") {
+        countSql += ` AND (type IN ('inventory', 'shopping', 'group') OR (type = 'system' AND group_name IS NOT NULL))`;
+      } else if (version === "v2" && category === "official") {
+        countSql += ` AND ((category = 'official' OR type = 'system') AND type NOT IN ('inventory', 'shopping', 'group') AND group_name IS NULL)`;
+      } else {
+        countSql += ` AND category = $2`;
+        countParams.push(category);
+      }
     }
 
     const countResult = await query(countSql, countParams);
@@ -183,8 +190,14 @@ export const notificationService = {
     let paramIndex = 2;
 
     if (category) {
-      sql += ` AND n.category = $${paramIndex++}`;
-      params.push(category);
+      if (version === "v2" && category === "stock") {
+        sql += ` AND (n.type IN ('inventory', 'shopping', 'group') OR (n.type = 'system' AND n.group_name IS NOT NULL))`;
+      } else if (version === "v2" && category === "official") {
+        sql += ` AND ((n.category = 'official' OR n.type = 'system') AND n.type NOT IN ('inventory', 'shopping', 'group') AND n.group_name IS NULL)`;
+      } else {
+        sql += ` AND n.category = $${paramIndex++}`;
+        params.push(category);
+      }
     }
 
     sql += ` ORDER BY n.created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
@@ -301,14 +314,14 @@ export const notificationService = {
     // 1. 自動映射分類 (Mapping logic based on extension spec)
     let finalCategory = category;
     if (!finalCategory) {
-      if (type === "shopping" || type === "inventory") {
+      if (type === "shopping" || type === "inventory" || type === "group") {
         finalCategory = "stock";
       } else if (type === "recipe") {
         finalCategory = "inspiration";
-      } else if (type === "group" || type === "system") {
-        finalCategory = "official";
+      } else if (type === "system") {
+        finalCategory = groupName ? "stock" : "official";
       } else {
-        finalCategory = "stock"; // 庫存管理為預設主要業務
+        finalCategory = "official";
       }
     }
     // 1. 取得使用者設定

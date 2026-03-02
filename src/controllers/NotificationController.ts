@@ -80,6 +80,7 @@ export class NotificationController extends BaseController {
         page,
         limit,
         category,
+        "v2",
       );
 
       this.handleSuccess(res, {
