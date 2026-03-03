@@ -1,0 +1,23 @@
+import { Router } from "express";
+import { InventoryController } from "../../controllers/InventoryController.js";
+import { jwtAuth } from "../../middleware/jwtAuth.js";
+import { validate } from "../../middleware/validate.js";
+import { createInventorySchema, updateInventorySchema, consumeInventorySchema, updateInventorySettingsSchema, } from "../../validators/inventorySchemas.js";
+import { verifyGroupMembership } from "../../middleware/groupMembership.js";
+const router = Router({ mergeParams: true });
+const controller = new InventoryController();
+// 所有 v2 inventory 路由皆需 JWT 認證，並驗證所屬群組權限
+router.use(jwtAuth);
+router.use(verifyGroupMembership("groupId"));
+router.get("/", (req, res) => controller.list(req, res));
+router.get("/categories", (req, res) => controller.getCategories(req, res));
+router.get("/summary", (req, res) => controller.getSummary(req, res));
+router.get("/settings", (req, res) => controller.getSettings(req, res));
+router.put("/settings", validate(updateInventorySettingsSchema), (req, res) => controller.updateSettings(req, res));
+router.patch("/settings", validate(updateInventorySettingsSchema), (req, res) => controller.updateSettings(req, res));
+router.get("/:id", (req, res) => controller.getById(req, res));
+router.post("/", validate(createInventorySchema), (req, res) => controller.create(req, res));
+router.put("/:id", validate(updateInventorySchema), (req, res) => controller.update(req, res));
+router.delete("/:id", (req, res) => controller.remove(req, res));
+router.post("/:id/consume", validate(consumeInventorySchema), (req, res) => controller.consume(req, res));
+export default router;

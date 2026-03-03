@@ -13,6 +13,7 @@ export const users = pgTable("users", {
     customGender: varchar("custom_gender", { length: 100 }),
     preferences: jsonb("preferences").default([]),
     lineUserId: varchar("line_user_id", { length: 255 }),
+    provider: varchar("provider", { length: 20 }).default("local"),
     // Legacy columns (keep them to prevent data loss during push)
     fcmToken: text("fcm_token"),
     notifyPush: boolean("notify_push"),

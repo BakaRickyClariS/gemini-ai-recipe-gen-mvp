@@ -12,6 +12,7 @@ import { validateAIRecipeRequest } from "../../middleware/errorHandler.js";
 import { uploadToCloudinary } from "../../services/mediaService.js";
 import { analyzeMultipleIngredients } from "../../services/multipleIngredientsService.js";
 import { optionalCookieAuth, } from "../../middleware/cookieAuth.js";
+import { notificationService } from "../../services/notificationService.js";
 const router = Router();
 // 智能判斷上傳目錄
 const uploadDir = (() => {
@@ -36,6 +37,23 @@ router.post("/recipe", validateAIRecipeRequest, optionalCookieAuth, async (req, 
         const userId = req.userId || "anonymous";
         const response = await generateMultipleRecipes(request, userId);
         res.json(response);
+        // Fire-and-forget: #12 AI 食譜完成通知（個人）
+        if (userId !== "anonymous" && response?.data) {
+            const recipes = Array.isArray(response.data)
+                ? response.data
+                : [response.data];
+            const firstName = recipes[0]?.name || "新食譜";
+            const count = recipes.length;
+            const title = count > 1
+                ? `阿福靈感大爆發！${count} 道新食譜出爐`
+                : `阿福靈感大爆發！新食譜出爐`;
+            const body = count > 1
+                ? `冰箱小隊為您獻上 ${firstName} 等 ${count} 道料理靈感！`
+                : `冰箱小隊為您獻上今日料理靈感：${firstName}`;
+            notificationService
+                .send(userId, title, body, "recipe", { type: "recipe", payload: { recipeId: recipes[0]?.id } }, "inspiration", "generate")
+                .catch((e) => console.error("[Notification] AI recipe error:", e));
+        }
     }
     catch (err) {
         next(err);
@@ -82,7 +100,7 @@ router.get("/recipe/suggestions", (_req, res) => {
 });
 // ===== 媒體上傳 =====
 /** POST /media/upload — 上傳到 Cloudinary */
-router.post("/media/upload", upload.single("file"), async (req, res) => {
+router.post(["/media/upload", "/upload"], upload.single("file"), async (req, res) => {
     if (!req.file) {
         res.status(400).json({
             success: false,

@@ -1,5 +1,5 @@
-import "./instrument.js";
 import "dotenv/config";
+import "./instrument.js";
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -22,11 +22,16 @@ import v2ProfileRoutes from "./routes/v2/profileRoutes.js";
 import v2GroupRoutes from "./routes/v2/groupRoutes.js";
 import v2ShoppingListRoutes from "./routes/v2/shoppingListRoutes.js";
 import v2SubscriptionRoutes from "./routes/v2/subscriptionRoutes.js";
+import v2InventoryRoutes from "./routes/v2/inventoryRoutes.js";
+import v2NotificationRoutes from "./routes/v2/notificationRoutes.js";
+import v2RecipeRoutes from "./routes/v2/recipeRoutes.js";
+import v2MediaRoutes from "./routes/v2/mediaRoutes.js";
 // ===== Middleware & Error Handling =====
 import { aiRecipeErrorHandler } from "./middleware/errorHandler.js";
 import { GroupController } from "./controllers/GroupController.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
 import { ApiError } from "./errors/ApiError.js";
+import { verifyCsrfToken } from "./middleware/csrfProtection.js";
 import * as Sentry from "@sentry/node";
 const app = express();
 const PORT = config.port;
@@ -50,7 +55,7 @@ app.use(cors({
         "X-User-Id", // 向下相容：前端傳遞使用者 ID
     ],
 }));
-app.use(express.json());
+app.use(express.json({ type: ["application/json", "text/plain"] }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 // ===== Swagger UI =====
@@ -75,11 +80,28 @@ app.use("/api/cron", v1CronRoutes);
 app.use("/api/v1/ai", v1AiRoutes);
 app.use("/api/v1/media", v1AiRoutes); // media/upload 也在 aiRoutes 中
 // ===== v2 API Routes =====
+// Apply CSRF checking to all non-GET V2 routes by default
+app.use("/api/v2", (req, res, next) => {
+    const exemptPaths = [
+        "/auth/line/init",
+        "/auth/login",
+        "/auth/register",
+        "/auth/refresh",
+    ];
+    if (exemptPaths.includes(req.path)) {
+        return next();
+    }
+    verifyCsrfToken(req, res, next);
+});
 app.use("/api/v2/auth", v2AuthRoutes);
 app.use("/api/v2/profile", v2ProfileRoutes);
 app.use("/api/v2/groups", v2GroupRoutes);
 app.use("/api/v2", v2ShoppingListRoutes);
 app.use("/api/v2/subscriptions", v2SubscriptionRoutes);
+app.use("/api/v2/groups/:groupId/inventory", v2InventoryRoutes);
+app.use("/api/v2/notifications", v2NotificationRoutes);
+app.use("/api/v2/recipes", v2RecipeRoutes);
+app.use("/api/v2/media", v2MediaRoutes);
 // Public invitation lookup (no auth required)
 const groupController = new GroupController();
 app.get("/api/v2/invitations/:token", (req, res) => groupController.getInvitation(req, res));

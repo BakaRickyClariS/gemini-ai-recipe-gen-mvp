@@ -8,3 +8,4 @@ export { groupInvitations } from "./groupInvitations.js";
 export { shoppingLists } from "./shoppingLists.js";
 export { shoppingListItems } from "./shoppingListItems.js";
 export { subscriptions } from "./subscriptions.js";
+export { fcmTokens } from "./fcmTokens.js";

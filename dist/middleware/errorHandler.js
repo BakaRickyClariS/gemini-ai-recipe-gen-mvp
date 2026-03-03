@@ -35,19 +35,13 @@ export class AIRecipeError extends Error {
     }
 }
 // ===== 錯誤處理中介層 =====
-export function aiRecipeErrorHandler(err, _req, res, _next) {
+export function aiRecipeErrorHandler(err, _req, res, next) {
     if (err instanceof AIRecipeError) {
         res.status(err.httpStatus).json(err.toResponse());
         return;
     }
-    // 未預期的錯誤
-    console.error("[AI Recipe Error]", err);
-    res.status(500).json({
-        code: "AI_005",
-        message: "AI 服務暫時無法使用",
-        details: { originalError: err.message },
-        timestamp: new Date().toISOString(),
-    });
+    // 若不是 AI 專屬錯誤，交給下一個 global error handler 處理 (e.g. ApiError)
+    next(err);
 }
 // ===== 驗證中介層 =====
 const PROMPT_MAX_LENGTH = 4000;

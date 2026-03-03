@@ -1,5 +1,6 @@
 import { messaging } from "../lib/firebase.js";
 import { query } from "../db/index.js";
+import * as Sentry from "@sentry/node";
 export const notificationService = {
     /**
      * 註冊或更新 FCM Token（多裝置支援）
@@ -117,14 +118,22 @@ export const notificationService = {
     /**
      * 取得通知列表
      */
-    getNotifications: async (userId, page = 1, limit = 20, category) => {
+    getNotifications: async (userId, page = 1, limit = 20, category, version = "v1") => {
         const offset = (page - 1) * limit;
         // 查詢總數
         let countSql = `SELECT COUNT(*) as total FROM notifications WHERE user_id = $1`;
         let countParams = [userId];
         if (category) {
-            countSql += ` AND category = $2`;
-            countParams.push(category);
+            if (version === "v2" && category === "stock") {
+                countSql += ` AND (type IN ('inventory', 'shopping', 'group') OR (type = 'system' AND group_name IS NOT NULL))`;
+            }
+            else if (version === "v2" && category === "official") {
+                countSql += ` AND ((category = 'official' OR type = 'system') AND type NOT IN ('inventory', 'shopping', 'group') AND group_name IS NULL)`;
+            }
+            else {
+                countSql += ` AND category = $2`;
+                countParams.push(category);
+            }
         }
         const countResult = await query(countSql, countParams);
         const total = parseInt(countResult.rows[0]?.total || "0", 10);
@@ -136,41 +145,93 @@ export const notificationService = {
         let sql = `
       SELECT 
         n.id, n.category, n.type, n.sub_type, n.title, n.message, n.is_read, n.action_type, n.action_payload, n.created_at,
-        n.actor_id,
-        COALESCE(n.group_name, r.name) as group_name,
-        COALESCE(n.actor_name, u.display_name) as actor_name
+        n.actor_id, n.group_name, n.actor_name
       FROM notifications n
-      LEFT JOIN refrigerators r ON (n.action_payload::json->>'refrigeratorId') = r.id::text
-      LEFT JOIN users u ON (n.action_payload::json->>'actorId') = u.id OR (n.action_payload::json->>'operatorId') = u.id
       WHERE n.user_id = $1
     `;
         let params = [userId];
         let paramIndex = 2;
         if (category) {
-            sql += ` AND n.category = $${paramIndex++}`;
-            params.push(category);
+            if (version === "v2" && category === "stock") {
+                sql += ` AND (n.type IN ('inventory', 'shopping', 'group') OR (n.type = 'system' AND n.group_name IS NOT NULL))`;
+            }
+            else if (version === "v2" && category === "official") {
+                sql += ` AND ((n.category = 'official' OR n.type = 'system') AND n.type NOT IN ('inventory', 'shopping', 'group') AND n.group_name IS NULL)`;
+            }
+            else {
+                sql += ` AND n.category = $${paramIndex++}`;
+                params.push(category);
+            }
         }
         sql += ` ORDER BY n.created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`;
         params.push(limit, offset);
         const result = await query(sql, params);
+        // 取得關聯的 IDs (避免在 SQL 裡解析 JSON 發生錯誤)
+        const refIds = new Set();
+        const userIdsToFetch = new Set();
+        const parsedNotifications = result.rows.map((row) => {
+            let payloadObj = null;
+            if (row.action_payload &&
+                typeof row.action_payload === "string" &&
+                row.action_payload.startsWith("{")) {
+                try {
+                    payloadObj = JSON.parse(row.action_payload);
+                    if (payloadObj.refrigeratorId)
+                        refIds.add(String(payloadObj.refrigeratorId));
+                    if (payloadObj.actorId)
+                        userIdsToFetch.add(String(payloadObj.actorId));
+                    if (payloadObj.operatorId)
+                        userIdsToFetch.add(String(payloadObj.operatorId));
+                }
+                catch (e) {
+                    // ignore parsing error
+                }
+            }
+            return { ...row, payloadObj };
+        });
+        // 批次查詢關聯資料
+        const refrigeratorsMap = new Map();
+        const usersMap = new Map();
+        if (refIds.size > 0) {
+            const refsResult = await query(`SELECT id, name FROM refrigerators WHERE id = ANY($1::uuid[])`, [Array.from(refIds)]);
+            refsResult.rows.forEach((r) => refrigeratorsMap.set(String(r.id), r.name));
+        }
+        if (userIdsToFetch.size > 0) {
+            const usersResult = await query(`SELECT id, display_name FROM users WHERE id = ANY($1)`, [Array.from(userIdsToFetch)]);
+            usersResult.rows.forEach((u) => usersMap.set(String(u.id), u.display_name));
+        }
         // 轉換成前端易讀格式
-        const notifications = result.rows.map((row) => ({
-            id: row.id,
-            category: row.category || "system",
-            type: row.type,
-            subType: row.sub_type,
-            title: row.title,
-            message: row.message,
-            isRead: row.is_read,
-            action: {
-                type: row.action_type,
-                payload: row.action_payload,
-            },
-            createdAt: row.created_at,
-            groupName: row.group_name,
-            actorName: row.actor_name,
-            actorId: row.actor_id,
-        }));
+        const notifications = parsedNotifications.map((row) => {
+            let groupName = row.group_name;
+            let actorName = row.actor_name;
+            if (!groupName && row.payloadObj?.refrigeratorId) {
+                groupName =
+                    refrigeratorsMap.get(String(row.payloadObj.refrigeratorId)) || null;
+            }
+            if (!actorName && row.payloadObj) {
+                actorName =
+                    usersMap.get(String(row.payloadObj.actorId)) ||
+                        usersMap.get(String(row.payloadObj.operatorId)) ||
+                        null;
+            }
+            return {
+                id: row.id,
+                category: row.category || "system",
+                type: row.type,
+                subType: row.sub_type,
+                title: row.title,
+                message: row.message,
+                isRead: row.is_read,
+                action: {
+                    type: row.action_type,
+                    payload: row.action_payload, // front-end receives raw string or json object depending on original implementation
+                },
+                createdAt: row.created_at,
+                groupName: groupName,
+                actorName: actorName,
+                actorId: row.actor_id,
+            };
+        });
         return { notifications, total, unreadCount };
     },
     /**
@@ -183,17 +244,17 @@ export const notificationService = {
         // 1. 自動映射分類 (Mapping logic based on extension spec)
         let finalCategory = category;
         if (!finalCategory) {
-            if (type === "shopping" || type === "inventory") {
+            if (type === "shopping" || type === "inventory" || type === "group") {
                 finalCategory = "stock";
             }
             else if (type === "recipe") {
                 finalCategory = "inspiration";
             }
-            else if (type === "group" || type === "system") {
-                finalCategory = "official";
+            else if (type === "system") {
+                finalCategory = groupName ? "stock" : "official";
             }
             else {
-                finalCategory = "stock"; // 庫存管理為預設主要業務
+                finalCategory = "official";
             }
         }
         // 1. 取得使用者設定
@@ -259,11 +320,20 @@ export const notificationService = {
                             type,
                             actionType: actionType || "",
                             actionId: action?.payload?.id || "",
+                            subType: subType || "",
+                            groupName: groupName || "",
+                            actorName: actorName || "",
+                            actorId: actorId || "",
+                            refrigeratorId: action?.payload?.refrigeratorId || "",
                         },
                     });
                     console.log(`[Notification] FCM sent successfully to token: ${token.substring(0, 20)}...`);
                 }
                 catch (error) {
+                    Sentry.captureException(error, {
+                        tags: { service: "fcm", userId },
+                        extra: { type, subType, tokenPrefix: token.substring(0, 20) },
+                    });
                     console.error("[Notification] FCM Send Error:", error);
                     // 如果 token 失效，從 fcm_tokens 表刪除
                     if (error.code === "messaging/registration-token-not-registered") {
@@ -303,8 +373,7 @@ export const notificationService = {
     /**
      * 發送通知給冰箱（群組）的所有成員
      */
-    sendToRefrigeratorMembers: async (refrigeratorId, title, body, type, action, category = "stock", operatorId, subType, actorName, passedGroupName // [NEW] Allow caller to pass groupName
-    ) => {
+    sendToRefrigeratorMembers: async (refrigeratorId, title, body, type, action, category = "stock", operatorId, subType, actorName, passedGroupName) => {
         // 1. 找出該冰箱的所有成員
         // [MODIFIED] Using user_refrigerators based on migration for better reliability
         const membersResult = await query(`SELECT user_id FROM user_refrigerators WHERE refrigerator_id = $1`, [refrigeratorId]);

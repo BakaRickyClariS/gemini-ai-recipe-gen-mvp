@@ -40,7 +40,9 @@ export const config = {
     },
     cookie: {
         secure: optionalEnv("NODE_ENV") === "production",
-        sameSite: "none",
+        sameSite: optionalEnv("NODE_ENV") === "production"
+            ? "none"
+            : "lax",
         httpOnly: true,
     },
     admin: {

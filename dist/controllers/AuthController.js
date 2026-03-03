@@ -15,17 +15,32 @@ export class AuthController extends BaseController {
     /** POST /api/v2/auth/line/init */
     async lineInit(_req, res) {
         try {
-            const authUrl = authService.getLineAuthUrl();
+            const state = crypto.randomUUID();
+            // Store state in short-lived HttpOnly cookie for CSRF validation
+            res.cookie("line_state", state, {
+                ...COOKIE_OPTIONS,
+                maxAge: 10 * 60 * 1000, // 10 min — enough to complete OAuth flow
+            });
+            const authUrl = authService.getLineAuthUrl(state);
             this.handleSuccess(res, { authUrl });
         }
         catch (error) {
             this.handleError(error, res, "AuthController.lineInit");
         }
     }
+    /** GET /api/v2/auth/csrf-token */
+    async getCsrfToken(req, res) {
+        try {
+            this.handleSuccess(res, { csrfToken: req.csrfToken });
+        }
+        catch (error) {
+            this.handleError(error, res, "AuthController.getCsrfToken");
+        }
+    }
     /** GET /api/v2/auth/line/callback */
     async lineCallback(req, res) {
         try {
-            const { code } = req.query;
+            const { code, state } = req.query;
             if (!code || typeof code !== "string") {
                 res.status(400).json({
                     success: false,
@@ -33,7 +48,18 @@ export class AuthController extends BaseController {
                 });
                 return;
             }
-            const { user, accessToken, refreshToken } = await authService.handleLineCallback(code);
+            // CSRF: verify state matches the cookie set during lineInit
+            const storedState = req.cookies?.line_state;
+            if (!storedState || typeof state !== "string" || storedState !== state) {
+                res.status(403).json({
+                    success: false,
+                    error: { code: "FORBIDDEN", message: "Invalid OAuth state" },
+                });
+                return;
+            }
+            // Clear state cookie immediately after use
+            res.clearCookie("line_state", COOKIE_OPTIONS);
+            const { user, accessToken, refreshToken } = await authService.handleLineCallback(code, state);
             // Set HttpOnly cookies
             res.cookie("access_token", accessToken, {
                 ...COOKIE_OPTIONS,
@@ -43,14 +69,11 @@ export class AuthController extends BaseController {
                 ...COOKIE_OPTIONS,
                 maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
             });
-            this.handleSuccess(res, {
-                user: {
-                    id: user.id,
-                    displayName: user.displayName,
-                    profilePictureUrl: user.profilePictureUrl,
-                },
-                accessToken,
-            });
+            // 成功登入後跳轉回前端
+            const isLocal = req.hostname === "localhost" || req.hostname === "127.0.0.1";
+            const baseUrl = process.env.FRONTEND_URL ||
+                (isLocal ? "http://localhost:5173" : config.cors.origins[0]);
+            res.redirect(`${baseUrl}/auth/success`);
         }
         catch (error) {
             this.handleError(error, res, "AuthController.lineCallback");

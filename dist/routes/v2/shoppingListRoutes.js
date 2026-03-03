@@ -6,11 +6,12 @@ import { ShoppingListController } from "../../controllers/ShoppingListController
 import { jwtAuth } from "../../middleware/jwtAuth.js";
 import { validate } from "../../middleware/validate.js";
 import { createShoppingListSchema, updateShoppingListSchema, createShoppingListItemSchema, updateShoppingListItemSchema, } from "../../validators/shoppingListSchemas.js";
+import { verifyGroupMembership } from "../../middleware/groupMembership.js";
 const router = Router();
 const controller = new ShoppingListController();
 // List CRUD via group
-router.get("/groups/:groupId/shopping-lists", jwtAuth, (req, res) => controller.listByGroup(req, res));
-router.post("/groups/:groupId/shopping-lists", jwtAuth, validate(createShoppingListSchema), (req, res) => controller.create(req, res));
+router.get("/groups/:groupId/shopping-lists", jwtAuth, verifyGroupMembership("groupId"), (req, res) => controller.listByGroup(req, res));
+router.post("/groups/:groupId/shopping-lists", jwtAuth, verifyGroupMembership("groupId"), validate(createShoppingListSchema), (req, res) => controller.create(req, res));
 // List by ID
 router.get("/shopping-lists/:id", jwtAuth, (req, res) => controller.getById(req, res));
 router.put("/shopping-lists/:id", jwtAuth, validate(updateShoppingListSchema), (req, res) => controller.update(req, res));
