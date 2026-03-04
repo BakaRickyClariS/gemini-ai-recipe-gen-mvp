@@ -28,6 +28,7 @@ import v2InventoryRoutes from "./routes/v2/inventoryRoutes.js";
 import v2NotificationRoutes from "./routes/v2/notificationRoutes.js";
 import v2RecipeRoutes from "./routes/v2/recipeRoutes.js";
 import v2MediaRoutes from "./routes/v2/mediaRoutes.js";
+import v2AiRoutes from "./routes/v2/aiRoutes.js";
 
 // ===== Middleware & Error Handling =====
 import { aiRecipeErrorHandler } from "./middleware/errorHandler.js";
@@ -118,6 +119,7 @@ app.use("/api/v2/groups/:groupId/inventory", v2InventoryRoutes);
 app.use("/api/v2/notifications", v2NotificationRoutes);
 app.use("/api/v2/recipes", v2RecipeRoutes);
 app.use("/api/v2/media", v2MediaRoutes);
+app.use("/api/v2/ai", v2AiRoutes);
 
 // Public invitation lookup (no auth required)
 const groupController = new GroupController();
