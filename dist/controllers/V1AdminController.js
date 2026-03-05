@@ -74,10 +74,24 @@ export class V1AdminController extends BaseController {
     async sendRelease(req, res) {
         try {
             const { version, changes } = req.body;
+            if (!version || !changes) {
+                res.status(400).json({
+                    success: false,
+                    error: "version and changes are required",
+                });
+                return;
+            }
+            // 組裝標題
+            const title = `🎉 FuFood v${version} 更新上線！`;
+            // 呼叫底層通知服務進行全站廣播
+            const result = await notificationService.sendAnnouncement(title, changes, "release", true, // shouldPush
+            { version, changes });
             res.json({
                 success: true,
-                message: `Release v${version} notification queued`,
-                changes,
+                data: {
+                    message: `Release v${version} notification sent successfully`,
+                    details: result,
+                },
             });
         }
         catch (error) {
