@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "FuFood AI Recipe API",
-    "version": "2.5.0",
-    "description": "AI 食譜生成 API - 支援 Gemini AI 多食譜推薦、SSE Streaming、庫存管理、FCM 多裝置推播"
+    "version": "3.0.0",
+    "description": "AI 食譜生成 API - 支援 Gemini AI 多食譜推薦、SSE Streaming、庫存管理、FCM 多裝置推播、v2 JWT 認證"
   },
   "servers": [
     {
@@ -13,13 +13,28 @@
   ],
   "tags": [
     { "name": "系統", "description": "健康檢查與系統狀態" },
-    { "name": "認證", "description": "Session 同步與登出" },
-    { "name": "AI 食譜", "description": "AI 食譜生成與建議" },
+    { "name": "認證 v1", "description": "v1 Session 同步與登出" },
+    {
+      "name": "認證 v2",
+      "description": "v2 JWT 登入、LINE OAuth、Token Refresh"
+    },
+    { "name": "AI 食譜", "description": "v1 AI 食譜生成與建議" },
+    {
+      "name": "AI 食譜 v2",
+      "description": "v2 AI 食譜生成（JWT 認證 + Zod 驗證）"
+    },
     { "name": "AI 圖片分析", "description": "食材影像辨識" },
-    { "name": "媒體上傳", "description": "圖片上傳" },
-    { "name": "食譜儲存", "description": "食譜 CRUD 操作" },
-    { "name": "庫存管理", "description": "冰箱食材庫存管理" },
-    { "name": "推播通知", "description": "FCM 推播與通知中心" },
+    { "name": "媒體上傳", "description": "圖片上傳（v1/v2）" },
+    { "name": "食譜儲存", "description": "食譜 CRUD 操作（v1/v2）" },
+    { "name": "庫存管理", "description": "v1 冰箱食材庫存管理" },
+    { "name": "庫存管理 v2", "description": "v2 群組冰箱食材庫存管理（JWT）" },
+    { "name": "推播通知", "description": "v1 FCM 推播與通知中心" },
+    { "name": "推播通知 v2", "description": "v2 通知管理（JWT）" },
+    { "name": "群組管理", "description": "v2 群組/冰箱管理（JWT）" },
+    { "name": "採買清單", "description": "v2 採買清單管理（JWT）" },
+    { "name": "訂閱管理", "description": "v2 訂閱管理（JWT）" },
+    { "name": "個人資料", "description": "v2 使用者個人資料（JWT）" },
+    { "name": "管理員 v1", "description": "管理員全站公告與發佈通知" },
     { "name": "排程任務", "description": "Cron Job 觸發端點" }
   ],
   "paths": {
@@ -78,11 +93,72 @@
         }
       }
     },
+    "/api/v1/admin/announcements": {
+      "post": {
+        "summary": "發佈官方公告",
+        "tags": ["管理員 v1"],
+        "security": [{ "BearerAuth": [] }, { "DeploySecret": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "body"],
+                "properties": {
+                  "title": { "type": "string" },
+                  "body": { "type": "string" },
+                  "targetUserIds": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "發佈成功" },
+          "400": { "description": "缺少必填欄位" },
+          "403": { "description": "無權限" }
+        }
+      }
+    },
+    "/api/v1/admin/release": {
+      "post": {
+        "summary": "發佈新版通知",
+        "tags": ["管理員 v1"],
+        "security": [{ "DeploySecret": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["version", "changes"],
+                "properties": {
+                  "version": { "type": "string", "example": "1.3.0" },
+                  "changes": {
+                    "type": "string",
+                    "example": "新增了 AI 食譜圖片生成功能！"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "發佈成功" },
+          "400": { "description": "缺少必填欄位" },
+          "403": { "description": "無權限" }
+        }
+      }
+    },
     "/api/v1/auth/sync-session": {
       "post": {
         "summary": "同步 Session",
         "description": "前端登入後將 Token 同步給 AI 後端，設定 HttpOnly Cookie",
-        "tags": ["認證"],
+        "tags": ["認證 v1"],
         "requestBody": {
           "required": true,
           "content": {
@@ -124,7 +200,7 @@
       "post": {
         "summary": "登出",
         "description": "清除 AI 後端的 HttpOnly Cookie",
-        "tags": ["認證"],
+        "tags": ["認證 v1"],
         "responses": {
           "200": {
             "description": "登出成功",
@@ -1224,59 +1300,7 @@
         }
       }
     },
-    "/api/v1/admin/announcements": {
-      "post": {
-        "summary": "發送官方公告（管理員專用）",
-        "tags": ["推播通知"],
-        "security": [{ "BearerAuth": [] }],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AnnouncementRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": { "description": "公告發送成功" }
-        }
-      }
-    },
-    "/api/v1/admin/announcements/release": {
-      "post": {
-        "summary": "版本更新公告（CI/CD 觸發）",
-        "tags": ["推播通知"],
-        "parameters": [
-          {
-            "name": "X-Deploy-Secret",
-            "in": "header",
-            "required": true,
-            "schema": { "type": "string" }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "version": { "type": "string", "example": "1.2.0" },
-                  "releaseNotes": { "type": "string" },
-                  "forceUpdate": { "type": "boolean", "default": false }
-                },
-                "required": ["version", "releaseNotes"]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": { "description": "版本公告發送成功" }
-        }
-      }
-    },
+
     "/api/cron/check-expiry": {
       "post": {
         "summary": "檢查過期食材並發送通知 (Cron Job)",
@@ -1306,10 +1330,1354 @@
           "401": { "description": "未授權 (Invalid Cron Secret)" }
         }
       }
+    },
+    "/api/v2/auth/register": {
+      "post": {
+        "summary": "註冊新帳號",
+        "tags": ["認證 v2"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password", "name"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string", "minLength": 6 },
+                  "name": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "註冊成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/V2AuthResponse" }
+              }
+            }
+          },
+          "409": { "description": "Email 已被使用" }
+        }
+      }
+    },
+    "/api/v2/auth/login": {
+      "post": {
+        "summary": "Email 登入",
+        "tags": ["認證 v2"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "登入成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/V2AuthResponse" }
+              }
+            }
+          },
+          "401": { "description": "密碼錯誤" }
+        }
+      }
+    },
+    "/api/v2/auth/line/init": {
+      "post": {
+        "summary": "LINE OAuth 登入初始化",
+        "tags": ["認證 v2"],
+        "responses": {
+          "200": {
+            "description": "回傳 LINE 登入 URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "authUrl": { "type": "string" },
+                        "state": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/auth/line/callback": {
+      "get": {
+        "summary": "LINE OAuth 回調",
+        "tags": ["認證 v2"],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "302": { "description": "重導到前端登入完成頁面" } }
+      }
+    },
+    "/api/v2/auth/refresh": {
+      "post": {
+        "summary": "刷新 Access Token",
+        "tags": ["認證 v2"],
+        "responses": {
+          "200": { "description": "新 Token 已發放" },
+          "401": { "description": "Refresh Token 無效" }
+        }
+      }
+    },
+    "/api/v2/auth/logout": {
+      "post": {
+        "summary": "v2 登出",
+        "tags": ["認證 v2"],
+        "responses": { "200": { "description": "登出成功，Cookie 已清除" } }
+      }
+    },
+    "/api/v2/auth/me": {
+      "get": {
+        "summary": "取得當前登入使用者資訊",
+        "tags": ["認證 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "使用者資訊" },
+          "401": { "description": "未登入" }
+        }
+      }
+    },
+    "/api/v2/auth/csrf-token": {
+      "get": {
+        "summary": "取得 CSRF Token",
+        "tags": ["認證 v2"],
+        "responses": { "200": { "description": "CSRF Token" } }
+      }
+    },
+    "/api/v2/ai/recipe/suggestions": {
+      "get": {
+        "summary": "取得預設 Prompt 建議",
+        "tags": ["AI 食譜 v2"],
+        "responses": {
+          "200": {
+            "description": "Prompt 建議列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "suggestions": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/ai/recipe/quota": {
+      "get": {
+        "summary": "查詢 Quota 狀態",
+        "tags": ["AI 食譜 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "使用者 Quota 資訊" },
+          "401": { "description": "未登入" }
+        }
+      }
+    },
+    "/api/v2/ai/recipe/stream": {
+      "post": {
+        "summary": "v2 AI 食譜生成（SSE 串流）",
+        "tags": ["AI 食譜 v2"],
+        "description": "使用 Server-Sent Events 即時串流回應，輸入格式與 v1 相同但改用 Zod 驗證",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/V2AIRecipeRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SSE 串流回應",
+            "content": {
+              "text/event-stream": { "schema": { "type": "string" } }
+            }
+          },
+          "422": { "description": "Zod 驗證失敗" }
+        }
+      }
+    },
+    "/api/v2/ai/recipe": {
+      "post": {
+        "summary": "v2 AI 食譜生成（標準回應）",
+        "tags": ["AI 食譜 v2"],
+        "description": "Optional Auth：登入延伸 daily quota；匂序步驟山影片自動生成並上傳 Cloudinary",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/V2AIRecipeRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "食譜生成成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/V2AIRecipeSuccessResponse"
+                }
+              }
+            }
+          },
+          "422": { "description": "Zod 驗證失敗" },
+          "429": { "description": "超過每日 Quota" }
+        }
+      }
+    },
+    "/api/v2/media/upload": {
+      "post": {
+        "summary": "v2 上傳圖片（JWT 認證）",
+        "tags": ["媒體上傳"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": { "type": "string", "format": "binary" }
+                },
+                "required": ["file"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "上傳成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "url": { "type": "string" },
+                        "publicId": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "未登入" }
+        }
+      }
+    },
+    "/api/v2/recipes": {
+      "get": {
+        "summary": "v2 取得食譜列表",
+        "tags": ["食譜儲存"],
+        "parameters": [
+          { "name": "userId", "in": "query", "schema": { "type": "string" } },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 20 }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": { "type": "integer", "default": 0 }
+          }
+        ],
+        "responses": { "200": { "description": "食譜列表" } }
+      },
+      "post": {
+        "summary": "v2 儲存新食譜",
+        "tags": ["食譜儲存"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateRecipeInput" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "建立成功" },
+          "401": { "description": "未登入" }
+        }
+      }
+    },
+    "/api/v2/recipes/{id}": {
+      "get": {
+        "summary": "v2 取得單一食譜",
+        "tags": ["食譜儲存"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "食譜詳情" },
+          "404": { "description": "找不到食譜" }
+        }
+      },
+      "put": {
+        "summary": "v2 更新食譜",
+        "tags": ["食譜儲存"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateRecipeInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "更新成功" },
+          "404": { "description": "找不到食譜" }
+        }
+      },
+      "delete": {
+        "summary": "v2 刪除食譜",
+        "tags": ["食譜儲存"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "刪除成功" },
+          "404": { "description": "找不到食譜" }
+        }
+      }
+    },
+    "/api/v2/profile": {
+      "get": {
+        "summary": "取得個人資料",
+        "tags": ["個人資料"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "個人資料" },
+          "401": { "description": "未登入" }
+        }
+      },
+      "patch": {
+        "summary": "更新個人資料",
+        "tags": ["個人資料"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "avatarUrl": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "更新成功" } }
+      }
+    },
+    "/api/v2/groups": {
+      "get": {
+        "summary": "取得群組列表",
+        "tags": ["群組管理"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "群組列表" } }
+      },
+      "post": {
+        "summary": "建立群組",
+        "tags": ["群組管理"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "我家的冰箱" },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "建立成功" } }
+      }
+    },
+    "/api/v2/groups/{id}": {
+      "get": {
+        "summary": "取得群組詳情",
+        "tags": ["群組管理"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "群組詳情" },
+          "403": { "description": "無權限" },
+          "404": { "description": "找不到群組" }
+        }
+      },
+      "put": {
+        "summary": "更新群組",
+        "tags": ["群組管理"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "更新成功" } }
+      },
+      "delete": {
+        "summary": "解散群組",
+        "tags": ["群組管理"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": { "200": { "description": "解散成功" } }
+      }
+    },
+    "/api/v2/groups/{id}/invitations": {
+      "post": {
+        "summary": "產生邀請連結",
+        "tags": ["群組管理"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "邀請連結已產生",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "token": { "type": "string" },
+                        "inviteUrl": { "type": "string" },
+                        "expiresAt": { "type": "string", "format": "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/groups/join": {
+      "post": {
+        "summary": "加入群組（透過邀請 token）",
+        "tags": ["群組管理"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["token"],
+                "properties": { "token": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "加入成功" },
+          "404": { "description": "邀請連結無效或已過期" }
+        }
+      }
+    },
+    "/api/v2/groups/{id}/members/{memberId}": {
+      "delete": {
+        "summary": "移除成員",
+        "tags": ["群組管理"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "memberId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": { "200": { "description": "移除成功" } }
+      }
+    },
+    "/api/v2/groups/{id}/leave": {
+      "delete": {
+        "summary": "離開群組",
+        "tags": ["群組管理"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": { "200": { "description": "離開成功" } }
+      }
+    },
+    "/api/v2/invitations/{token}": {
+      "get": {
+        "summary": "查詢邀請 Token 詳情（公開，無需認證）",
+        "tags": ["群組管理"],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "邀請詳情" },
+          "404": { "description": "Token 無效或已過期" }
+        }
+      }
+    },
+    "/api/v2/groups/{groupId}/inventory": {
+      "get": {
+        "summary": "v2 取得庫存列表",
+        "tags": ["庫存管理 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          { "name": "category", "in": "query", "schema": { "type": "string" } },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["fresh", "expiring", "expired"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "庫存列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "v2 新增食材",
+        "tags": ["庫存管理 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateInventoryInput" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "新增成功" } }
+      }
+    },
+    "/api/v2/groups/{groupId}/inventory/categories": {
+      "get": {
+        "summary": "v2 取得庫存分類",
+        "tags": ["庫存管理 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": { "200": { "description": "分類列表" } }
+      }
+    },
+    "/api/v2/groups/{groupId}/inventory/summary": {
+      "get": {
+        "summary": "v2 取得庫存摘要",
+        "tags": ["庫存管理 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": { "200": { "description": "庫存摘要統計" } }
+      }
+    },
+    "/api/v2/groups/{groupId}/inventory/settings": {
+      "get": {
+        "summary": "v2 取得庫存設定",
+        "tags": ["庫存管理 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": { "200": { "description": "庫存設定" } }
+      },
+      "put": {
+        "summary": "v2 更新庫存設定（完整覆蓋）",
+        "tags": ["庫存管理 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/InventorySettings" }
+            }
+          }
+        },
+        "responses": { "200": { "description": "設定更新成功" } }
+      },
+      "patch": {
+        "summary": "v2 更新庫存設定（部分更新）",
+        "tags": ["庫存管理 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/InventorySettings" }
+            }
+          }
+        },
+        "responses": { "200": { "description": "更新成功" } }
+      }
+    },
+    "/api/v2/groups/{groupId}/inventory/{id}": {
+      "get": {
+        "summary": "v2 取得單筆食材",
+        "tags": ["庫存管理 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "食材詳情" },
+          "404": { "description": "找不到" }
+        }
+      },
+      "put": {
+        "summary": "v2 更新食材",
+        "tags": ["庫存管理 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateInventoryInput" }
+            }
+          }
+        },
+        "responses": { "200": { "description": "更新成功" } }
+      },
+      "delete": {
+        "summary": "v2 刪除食材",
+        "tags": ["庫存管理 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": { "200": { "description": "刪除成功" } }
+      }
+    },
+    "/api/v2/groups/{groupId}/inventory/{id}/consume": {
+      "post": {
+        "summary": "v2 消耗食材",
+        "tags": ["庫存管理 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ConsumeInventoryInput" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "消耗成功" },
+          "400": { "description": "消耗數量超過庫存" }
+        }
+      }
+    },
+    "/api/v2/notifications": {
+      "get": {
+        "summary": "v2 取得通知列表",
+        "tags": ["推播通知 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 20 }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["stock", "inspiration", "official"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "通知列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/notifications/token": {
+      "post": {
+        "summary": "v2 註冊 FCM Token",
+        "tags": ["推播通知 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["fcmToken"],
+                "properties": {
+                  "fcmToken": { "type": "string" },
+                  "platform": {
+                    "type": "string",
+                    "enum": ["web", "ios", "android"],
+                    "default": "web"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "註冊成功" } }
+      },
+      "delete": {
+        "summary": "v2 刪除 FCM Token",
+        "tags": ["推播通知 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["fcmToken"],
+                "properties": { "fcmToken": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "刪除成功" } }
+      }
+    },
+    "/api/v2/notifications/settings": {
+      "get": {
+        "summary": "v2 取得通知設定",
+        "tags": ["推播通知 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "通知設定" } }
+      },
+      "patch": {
+        "summary": "v2 更新通知設定",
+        "tags": ["推播通知 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/NotificationSettings" }
+            }
+          }
+        },
+        "responses": { "200": { "description": "更新成功" } }
+      }
+    },
+    "/api/v2/notifications/batch-read": {
+      "post": {
+        "summary": "v2 批次標記已讀",
+        "tags": ["推播通知 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["ids"],
+                "properties": {
+                  "ids": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "更新成功" } }
+      }
+    },
+    "/api/v2/notifications/batch-delete": {
+      "post": {
+        "summary": "v2 批次刪除通知",
+        "tags": ["推播通知 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["ids"],
+                "properties": {
+                  "ids": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "刪除成功" } }
+      }
+    },
+    "/api/v2/notifications/send": {
+      "post": {
+        "summary": "v2 發送推播通知",
+        "tags": ["推播通知 v2"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendNotificationRequest"
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "發送成功" } }
+      }
+    },
+    "/api/v2/groups/{groupId}/shopping-lists": {
+      "get": {
+        "summary": "取得群組採買清單列表",
+        "tags": ["採買清單"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": { "200": { "description": "採買清單列表" } }
+      },
+      "post": {
+        "summary": "建立採買清單",
+        "tags": ["採買清單"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": { "name": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "建立成功" } }
+      }
+    },
+    "/api/v2/shopping-lists/{id}": {
+      "get": {
+        "summary": "取得單一採買清單",
+        "tags": ["採買清單"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "採買清單詳情" },
+          "404": { "description": "找不到" }
+        }
+      },
+      "put": {
+        "summary": "更新採買清單",
+        "tags": ["採買清單"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "name": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "更新成功" } }
+      },
+      "delete": {
+        "summary": "刪除採買清單",
+        "tags": ["採買清單"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": { "200": { "description": "刪除成功" } }
+      }
+    },
+    "/api/v2/shopping-lists/{id}/items": {
+      "get": {
+        "summary": "取得清單項目",
+        "tags": ["採買清單"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": { "200": { "description": "清單項目列表" } }
+      },
+      "post": {
+        "summary": "新增清單項目",
+        "tags": ["採買清單"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "quantity": { "type": "number", "default": 1 },
+                  "unit": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "項目建立成功" } }
+      }
+    },
+    "/api/v2/shopping-list-items/{itemId}": {
+      "put": {
+        "summary": "更新清單項目",
+        "tags": ["採買清單"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "itemId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "quantity": { "type": "number" },
+                  "isChecked": { "type": "boolean" },
+                  "photoPath": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "更新成功" },
+          "404": { "description": "找不到項目" }
+        }
+      },
+      "delete": {
+        "summary": "刪除清單項目",
+        "tags": ["採買清單"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "itemId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": { "200": { "description": "刪除成功" } }
+      }
+    },
+    "/api/v2/subscriptions": {
+      "get": {
+        "summary": "取得訂閱狀態",
+        "tags": ["訂閱管理"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "訂閱資訊" } }
+      },
+      "post": {
+        "summary": "建立訂閱",
+        "tags": ["訂閱管理"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "201": { "description": "訂閱建立成功" } }
+      }
     }
   },
   "components": {
     "schemas": {
+      "V2AuthResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "data": {
+            "type": "object",
+            "properties": {
+              "token": { "type": "string" },
+              "user": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "name": { "type": "string" },
+                  "email": { "type": "string" },
+                  "avatarUrl": { "type": "string" },
+                  "isDefaultGroupCreated": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "V2AIRecipeRequest": {
+        "type": "object",
+        "required": ["prompt"],
+        "properties": {
+          "prompt": { "type": "string", "minLength": 3, "maxLength": 500 },
+          "servings": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "default": 2
+          },
+          "recipeCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "default": 2
+          },
+          "difficulty": { "type": "string", "enum": ["簡單", "中等", "困難"] },
+          "category": { "type": "string" },
+          "selectedIngredients": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "excludeIngredients": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "V2AIRecipeSuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": true },
+          "data": {
+            "type": "object",
+            "properties": {
+              "greeting": { "type": "string" },
+              "recipes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "format": "uuid" },
+                    "name": { "type": "string" },
+                    "category": { "type": "string" },
+                    "imageUrl": { "type": "string", "nullable": true },
+                    "servings": { "type": "integer" },
+                    "cookTime": { "type": "integer" },
+                    "difficulty": { "type": "string" },
+                    "isFavorite": { "type": "boolean" }
+                  }
+                }
+              },
+              "aiMetadata": {
+                "type": "object",
+                "properties": {
+                  "generatedAt": { "type": "string", "format": "date-time" },
+                  "model": { "type": "string" },
+                  "apiKeyUsed": { "type": "integer" }
+                }
+              },
+              "remainingQueries": { "type": "integer" }
+            }
+          }
+        }
+      },
       "ErrorResponse": {
         "type": "object",
         "properties": {
