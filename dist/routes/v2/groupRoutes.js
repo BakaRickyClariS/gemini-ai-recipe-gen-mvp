@@ -2,13 +2,13 @@
  * Group Routes v2
  */
 import { Router } from "express";
-import { GroupController } from "../../controllers/GroupController.js";
+import { V2GroupController } from "../../controllers/V2GroupController.js";
 import { jwtAuth } from "../../middleware/jwtAuth.js";
 import { validate } from "../../middleware/validate.js";
 import { createGroupSchema, updateGroupSchema, joinGroupSchema, } from "../../validators/groupSchemas.js";
 import { verifyGroupMembership } from "../../middleware/groupMembership.js";
 const router = Router();
-const controller = new GroupController();
+const controller = new V2GroupController();
 // Group CRUD
 router.get("/", jwtAuth, (req, res) => controller.list(req, res));
 router.post("/", jwtAuth, validate(createGroupSchema), (req, res) => controller.create(req, res));
