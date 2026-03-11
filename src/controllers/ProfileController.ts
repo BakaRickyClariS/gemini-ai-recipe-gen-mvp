@@ -3,6 +3,7 @@
  */
 
 import type { Request, Response } from "express";
+import { z } from "zod";
 import { BaseController } from "./BaseController.js";
 import { profileService } from "../services/profileService.js";
 import type { users } from "../db/schema/index.js";
@@ -52,6 +53,36 @@ export class ProfileController extends BaseController {
       this.handleSuccess(res, toProfileDto(updated as Record<string, unknown>));
     } catch (error) {
       this.handleError(error, res, "ProfileController.update");
+    }
+  }
+
+  /** PATCH /api/v2/profile/tour */
+  async updateTour(req: Request, res: Response): Promise<void> {
+    try {
+      // Validate input
+      const schema = z.object({
+        isCompleted: z.boolean().optional(),
+        currentStep: z.string().max(20).optional(),
+      });
+      const parsed = schema.parse(req.body);
+
+      const dataToUpdate: Record<string, any> = {
+        tourUpdatedAt: new Date(),
+      };
+      if (parsed.isCompleted !== undefined) {
+        dataToUpdate.tourCompleted = parsed.isCompleted;
+      }
+      if (parsed.currentStep !== undefined) {
+        dataToUpdate.tourCurrentStep = parsed.currentStep;
+      }
+
+      const updated = await profileService.updateProfile(
+        req.user!.userId,
+        dataToUpdate,
+      );
+      this.handleSuccess(res, toProfileDto(updated as Record<string, unknown>));
+    } catch (error) {
+      this.handleError(error, res, "ProfileController.updateTour");
     }
   }
 }
