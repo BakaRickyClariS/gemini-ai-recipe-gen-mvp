@@ -2,10 +2,14 @@
  * 集中環境變數管理
  * 遵循 backend-dev-guidelines：不直接使用 process.env
  */
+import "dotenv/config";
 
 function requireEnv(key: string, fallback?: string): string {
   const value = process.env[key] || fallback;
   if (!value) {
+    if (process.env.NODE_ENV === "test" && key !== "DATABASE_URL") {
+      return fallback || "test-dummy-value";
+    }
     throw new Error(`Missing required environment variable: ${key}`);
   }
   return value;
