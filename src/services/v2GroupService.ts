@@ -10,6 +10,7 @@ import {
   invitationRepository,
 } from "../repositories/groupRepository.js";
 import { ApiError } from "../errors/ApiError.js";
+import { createInventoryItem } from "./inventoryService.js";
 
 export const v2GroupService = {
   async listByUser(userId: string) {
@@ -34,7 +35,29 @@ export const v2GroupService = {
 
   // Re-use v1 methods where there is no difference in response shape needed
   async create(name: string, ownerId: string) {
-    return groupRepository.create({ name, ownerId });
+    const group = await groupRepository.create({ name, ownerId });
+
+    // Test drive / Onboarding: mock inventory for new groups
+    try {
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split("T")[0];
+      await createInventoryItem(ownerId, group.id, {
+        name: "迎賓牛奶 (示範)",
+        category: "milk",
+        quantity: 1,
+        unit: "瓶",
+        purchaseDate: new Date().toISOString().split("T")[0],
+        expiryDate: tomorrow,
+        notes: "這是自動為你準備的示範食材，幫助你體驗即期食譜功能 ✨",
+        lowStockAlert: true,
+        lowStockThreshold: 1,
+      });
+    } catch (e) {
+      console.warn("[Onboarding] Failed to create mock inventory item", e);
+    }
+
+    return group;
   },
 
   async update(id: string, userId: string, data: { name?: string }) {

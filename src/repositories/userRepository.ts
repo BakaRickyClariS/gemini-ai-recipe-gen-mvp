@@ -16,6 +16,9 @@ export interface UpdateProfileDto {
   gender?: string;
   customGender?: string | null;
   preferences?: unknown[];
+  tourCompleted?: boolean;
+  tourCurrentStep?: string;
+  tourUpdatedAt?: Date;
 }
 
 export const userRepository = {
