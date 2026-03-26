@@ -195,12 +195,12 @@ export const authService = {
   async register(input: {
     email: string;
     password: string;
-    displayName: string;
+    name: string;
   }) {
     // 1. Check if email exists
     const existing = await userRepository.findByEmail(input.email);
     if (existing) {
-      throw ApiError.conflict("Email already in use");
+      throw ApiError.conflict("該電子郵件已有人使用");
     }
 
     // 2. Hash password
@@ -212,9 +212,9 @@ export const authService = {
       id: uuidv4(),
       email: input.email,
       passwordHash,
-      displayName: input.displayName,
+      displayName: input.name,
       avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(
-        input.displayName,
+        input.name,
       )}&background=random`,
     });
 
