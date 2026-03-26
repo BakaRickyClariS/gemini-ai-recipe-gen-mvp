@@ -8,4 +8,5 @@ const router = Router();
 const controller = new ProfileController();
 router.get("/", jwtAuth, (req, res) => controller.get(req, res));
 router.put("/", jwtAuth, (req, res) => controller.update(req, res));
+router.patch("/tour", jwtAuth, (req, res) => controller.updateTour(req, res));
 export default router;

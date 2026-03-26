@@ -1,6 +1,7 @@
 /**
  * Profile Controller
  */
+import { z } from "zod";
 import { BaseController } from "./BaseController.js";
 import { profileService } from "../services/profileService.js";
 // Gender string → number enum mapping (per API contract)
@@ -43,6 +44,31 @@ export class ProfileController extends BaseController {
         }
         catch (error) {
             this.handleError(error, res, "ProfileController.update");
+        }
+    }
+    /** PATCH /api/v2/profile/tour */
+    async updateTour(req, res) {
+        try {
+            // Validate input
+            const schema = z.object({
+                isCompleted: z.boolean().optional(),
+                currentStep: z.string().max(20).optional(),
+            });
+            const parsed = schema.parse(req.body);
+            const dataToUpdate = {
+                tourUpdatedAt: new Date(),
+            };
+            if (parsed.isCompleted !== undefined) {
+                dataToUpdate.tourCompleted = parsed.isCompleted;
+            }
+            if (parsed.currentStep !== undefined) {
+                dataToUpdate.tourCurrentStep = parsed.currentStep;
+            }
+            const updated = await profileService.updateProfile(req.user.userId, dataToUpdate);
+            this.handleSuccess(res, toProfileDto(updated));
+        }
+        catch (error) {
+            this.handleError(error, res, "ProfileController.updateTour");
         }
     }
 }

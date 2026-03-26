@@ -155,7 +155,7 @@ export const authService = {
         // 1. Check if email exists
         const existing = await userRepository.findByEmail(input.email);
         if (existing) {
-            throw ApiError.conflict("Email already in use");
+            throw ApiError.conflict("該電子郵件已有人使用");
         }
         // 2. Hash password
         const salt = await bcrypt.genSalt(10);
@@ -165,8 +165,8 @@ export const authService = {
             id: uuidv4(),
             email: input.email,
             passwordHash,
-            displayName: input.displayName,
-            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(input.displayName)}&background=random`,
+            displayName: input.name,
+            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(input.name)}&background=random`,
         });
         // 4. Ensure default group exists
         const { groupService } = await import("./groupService.js");

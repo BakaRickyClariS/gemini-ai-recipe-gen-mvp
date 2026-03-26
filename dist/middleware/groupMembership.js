@@ -1,10 +1,13 @@
 import { ApiError } from "../errors/ApiError.js";
-import { query } from "../db/index.js";
+import { db } from "../db/drizzle.js";
+import { groupMemberships } from "../db/schema/index.js";
+import { eq, and } from "drizzle-orm";
 import * as Sentry from "@sentry/node";
 /**
  * Middleware to verify if the authenticated user is a member of the requested group.
  * Must be used AFTER jwtAuth middleware.
  * Expects the route parameter to contain the group ID (e.g. :groupId or :id).
+ * ✅ 修正：改查 group_memberships 表（Drizzle ORM），不再查舊的 user_refrigerators
  */
 export function verifyGroupMembership(idParam = "groupId") {
     return async (req, res, next) => {
@@ -17,13 +20,17 @@ export function verifyGroupMembership(idParam = "groupId") {
             if (!groupId) {
                 throw ApiError.badRequest("Group ID missing in route parameters");
             }
-            // Check membership in user_refrigerators
-            const result = await query(`SELECT role FROM user_refrigerators WHERE user_id = $1 AND refrigerator_id = $2`, [userId, groupId]);
-            if (result.rows.length === 0) {
+            // ✅ 查詢新的 group_memberships 表
+            const result = await db
+                .select({ role: groupMemberships.role })
+                .from(groupMemberships)
+                .where(and(eq(groupMemberships.userId, userId), eq(groupMemberships.groupId, groupId)))
+                .limit(1);
+            if (result.length === 0) {
                 throw ApiError.forbidden("Access denied: You are not a member of this group");
             }
             // Attach role to request for downstream usage
-            req.groupRole = result.rows[0].role;
+            req.groupRole = result[0].role;
             next();
         }
         catch (error) {

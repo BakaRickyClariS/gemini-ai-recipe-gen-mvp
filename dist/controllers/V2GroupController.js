@@ -62,10 +62,6 @@ export class V2GroupController extends BaseController {
             const groupId = req.params.id;
             const invitation = await v2GroupService.createInvitation(groupId, userId);
             this.handleCreated(res, invitation);
-            // Fire-and-forget: 邀請通知（通知群組現有成員有新邀請）
-            notificationService
-                .sendToRefrigeratorMembers(groupId, `新成員加入`, `已產生群組邀請連結`, "group", { type: "detail", payload: { refrigeratorId: groupId } }, "official", userId, "member")
-                .catch((e) => console.error("[Notification] createInvitation error:", e));
         }
         catch (error) {
             this.handleError(error, res, "V2GroupController.createInvitation");

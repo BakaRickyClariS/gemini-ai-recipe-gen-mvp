@@ -133,11 +133,7 @@ const getUnsplashImage = async (recipeName, category) => {
                 return data.urls?.regular || null;
             }
         }
-        // 如果沒有 Key 或 API 失敗，使用 Source Redirect 作為最後手段
-        const randomSig = Math.floor(Math.random() * 1000000);
-        // 這裡我們將中文名稱也傳進去，增加精準度
-        const searchTerm = `${categoryEn},food,${recipeName}`;
-        return `https://source.unsplash.com/featured/800x800?${encodeURIComponent(searchTerm)}&sig=${randomSig}`;
+        return null;
     }
     catch (err) {
         console.warn("[ImageGen] Unsplash lookup failed");
@@ -168,15 +164,24 @@ export const generateRecipeImage = async (recipeName, category) => {
     try {
         const pollinationsUrl = generateImageWithPollinations(recipeName, category);
         console.log(`[ImageGen] Using Pollinations fallback for: ${recipeName}`);
-        // 將 Pollinations 圖片上傳到 Cloudinary 以獲得永久網址
-        const uploadResult = await uploadToCloudinary(pollinationsUrl);
-        // 檢查是否又是那個 "Rate Limit" 的圖片 (Pollinations 額度滿了會回傳特定圖片)
-        // 雖然難以從 URL 判斷，但如果真的遇到了，我們可以靠 Unsplash 救場
+        // Fetch the image as arrayBuffer first because Cloudinary fetch URL might be blocked by Pollinations
+        const response = await fetch(pollinationsUrl, {
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            },
+        });
+        if (!response.ok) {
+            throw new Error(`Pollinations HTTP Error: ${response.status}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        // 將 Buffer 上傳到 Cloudinary 以獲得永久網址
+        const uploadResult = await uploadToCloudinary(buffer);
         console.log(`[ImageGen] Uploaded Pollinations image to Cloudinary: ${uploadResult.secure_url}`);
         return { url: uploadResult.secure_url };
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof Error ? err.message : JSON.stringify(err);
         console.warn(`[ImageGen] Pollinations or Cloudinary upload failed: ${message}`);
     }
     // 第三備用方案：Unsplash (搜尋真實照片)
@@ -188,9 +193,29 @@ export const generateRecipeImage = async (recipeName, category) => {
             const uploadResult = await uploadToCloudinary(unsplashUrl);
             return { url: uploadResult.secure_url };
         }
+        // 如果連 Unsplash API 也失效，直接回傳預設優質食譜圖 (避免 503 URL)
+        console.warn("[ImageGen] Falling back to static image mapping");
+        const categoryStaticMap = {
+            中式: "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe",
+            日式: "https://images.unsplash.com/photo-1553621042-f6e147245754",
+            西式: "https://images.unsplash.com/photo-1473093295043-cdd812d0e601",
+            韓式: "https://images.unsplash.com/photo-1580651315530-69c8e0026377",
+            泰式: "https://images.unsplash.com/photo-1559314809-0d155014e29e",
+            台式: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c",
+            義式: "https://images.unsplash.com/photo-1551183053-bf91a1d81141",
+        };
+        const staticUrl = categoryStaticMap[category] ||
+            "https://images.unsplash.com/photo-1504674900247-0877df9cc836";
+        // Fetch AND upload static Unsplash to ensure sizing and consistency
+        const response = await fetch(staticUrl);
+        const arrayBuffer = await response.arrayBuffer();
+        const staticUploadResult = await uploadToCloudinary(Buffer.from(arrayBuffer));
+        return { url: staticUploadResult.secure_url };
     }
     catch (unsplashErr) {
-        const message = unsplashErr instanceof Error ? unsplashErr.message : String(unsplashErr);
+        const message = unsplashErr instanceof Error
+            ? unsplashErr.message
+            : JSON.stringify(unsplashErr);
         console.error("[ImageGen] All fallbacks failed:", message);
     }
     return null;

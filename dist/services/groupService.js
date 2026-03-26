@@ -3,6 +3,7 @@
  */
 import { groupRepository, invitationRepository, } from "../repositories/groupRepository.js";
 import { ApiError } from "../errors/ApiError.js";
+import { createInventoryItem } from "./inventoryService.js";
 export const groupService = {
     async listByUser(userId) {
         let groups = await groupRepository.findByUserId(userId);
@@ -24,7 +25,28 @@ export const groupService = {
         return { ...group, members };
     },
     async create(name, ownerId) {
-        return groupRepository.create({ name, ownerId });
+        const group = await groupRepository.create({ name, ownerId });
+        // Test drive / Onboarding: mock inventory for new groups
+        try {
+            const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000)
+                .toISOString()
+                .split("T")[0];
+            await createInventoryItem(ownerId, group.id, {
+                name: "迎賓牛奶 (示範)",
+                category: "milk",
+                quantity: 1,
+                unit: "瓶",
+                purchaseDate: new Date().toISOString().split("T")[0],
+                expiryDate: tomorrow,
+                notes: "這是自動為你準備的示範食材，幫助你體驗即期食譜功能 ✨",
+                lowStockAlert: true,
+                lowStockThreshold: 1,
+            });
+        }
+        catch (e) {
+            console.warn("[Onboarding] Failed to create mock inventory item", e);
+        }
+        return group;
     },
     async update(id, userId, data) {
         const isOwner = await groupRepository.isOwner(id, userId);

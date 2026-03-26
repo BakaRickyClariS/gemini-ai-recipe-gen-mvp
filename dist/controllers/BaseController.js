@@ -26,8 +26,14 @@ export class BaseController {
             return;
         }
         if (error instanceof z.ZodError) {
+            // v2: 提取第一個錯誤訊息到頂層
+            const isV2 = res.req.originalUrl.startsWith("/api/v2");
+            const message = isV2
+                ? error.issues[0]?.message || "驗證失敗"
+                : "Validation failed";
             res.status(422).json({
                 success: false,
+                message,
                 error: {
                     code: "VALIDATION_ERROR",
                     message: "Validation failed",

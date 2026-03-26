@@ -16,6 +16,7 @@ import v1RecipeRoutes from "./routes/v1/recipeRoutes.js";
 import v1AdminRoutes from "./routes/v1/adminRoutes.js";
 import v1CronRoutes from "./routes/v1/cronRoutes.js";
 import v1AiRoutes from "./routes/v1/aiRoutes.js";
+import v1UserRoutes from "./routes/v1/userRoutes.js";
 // ===== v2 Routes =====
 import v2AuthRoutes from "./routes/v2/authRoutes.js";
 import v2ProfileRoutes from "./routes/v2/profileRoutes.js";
@@ -54,6 +55,7 @@ app.use(cors({
         "Accept",
         "Origin",
         "X-User-Id", // 向下相容：前端傳遞使用者 ID
+        "X-Csrf-Token",
     ],
 }));
 app.use(express.json({ type: ["application/json", "text/plain"] }));
@@ -80,6 +82,7 @@ app.use("/api/v1/admin", v1AdminRoutes);
 app.use("/api/cron", v1CronRoutes);
 app.use("/api/v1/ai", v1AiRoutes);
 app.use("/api/v1/media", v1AiRoutes); // media/upload 也在 aiRoutes 中
+app.use("/api/v1/users", v1UserRoutes);
 // ===== v2 API Routes =====
 // Apply CSRF checking to all non-GET V2 routes by default
 app.use("/api/v2", (req, res, next) => {

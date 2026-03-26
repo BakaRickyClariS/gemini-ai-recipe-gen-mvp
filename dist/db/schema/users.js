@@ -21,6 +21,10 @@ export const users = pgTable("users", {
     notifyMarketing: boolean("notify_marketing"),
     notifyLowStock: boolean("notify_low_stock"),
     daysBeforeExpiry: integer("days_before_expiry"),
+    // Test drive / App Tour state
+    tourCompleted: boolean("tour_completed").default(false),
+    tourCurrentStep: varchar("tour_current_step", { length: 20 }).default("LOGIN"),
+    tourUpdatedAt: timestamp("tour_updated_at").defaultNow(),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
 });
