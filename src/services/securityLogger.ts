@@ -8,7 +8,8 @@ export type SecurityEvent = {
     | "INJECTION_ATTEMPT"
     | "RATE_LIMIT_HIT"
     | "SUSPICIOUS_ACTIVITY"
-    | "SENSITIVE_CONTENT_BLOCKED";
+    | "SENSITIVE_CONTENT_BLOCKED"
+    | "PROMPT_LEAK_DETECTED";
   userId?: string;
   ip?: string;
   timestamp: string;
