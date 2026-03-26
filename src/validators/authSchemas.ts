@@ -19,9 +19,9 @@ export const refreshTokenSchema = z.object({
 });
 
 export const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  displayName: z.string().min(1),
+  email: z.string().email("請輸入有效的電子郵件"),
+  password: z.string().min(8, "密碼長度至少需 8 個字元"),
+  name: z.string().min(1, "請輸入使用者名稱"),
 });
 
 export const loginSchema = z.object({
